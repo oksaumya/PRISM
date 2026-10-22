@@ -87,10 +87,10 @@ The report compiles on Overleaf: upload the `report/` folder and compile `main.t
 A DeepAR-style global RNN with static item embeddings and dynamic calendar/price covariates implements the same `Forecaster.fit_predict` interface, so it drops into this harness unchanged. The planned **hybrid** feeds Kalman-filtered level, season and state uncertainty to the network as covariates, with ablations.
 
 ## Team
-| Member | Primary module |
-|---|---|
-| Member 1 | data pipeline, sampling, EDA |
-| Member 2 | stockout marking, cold-start design |
-| Member 3 | Kalman filter and local baselines |
-| Member 4 | features and global LightGBM |
-| Member 5 | backtest, metrics, significance tests, report |
+| Member | Enrollment No. | Primary module |
+|---|---|---|
+| Saumya Kumar | 2401010432| data pipeline, sampling, EDA |
+| Krishiv | 2401010234 | stockout marking, cold-start design |
+| Shivansh Upadhayay | 2401020109 |Kalman filter and local baselines |
+| Harsha Gonela | 2401010181 | features and global LightGBM |
+| Harshvardhan Gupta | 2401010185 | backtest, metrics, significance tests, report |
