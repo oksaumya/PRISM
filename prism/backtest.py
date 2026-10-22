@@ -31,6 +31,7 @@ def forecast_frame(fc: Forecast, model: str, cutoff: int) -> pd.DataFrame:
         "series": np.repeat(np.arange(N), H),
         "h": np.tile(np.arange(1, H + 1), N),
         "point": fc.point.reshape(-1).astype(np.float32),
+        "cross_size": fc.cross_size.reshape(-1).astype(np.float32),
     })
     df["day"] = df["origin"] + df["h"] - 1
     for j, a in enumerate(fc.levels):
@@ -59,8 +60,8 @@ def check_forecast(fc: Forecast, info: Panel, cutoff: int, horizon: int, levels:
 
 
 # Bump when the content of cached files changes (new columns, new diagnostics), so old
-# caches are not reused.
-CACHE_VERSION = 1
+# caches are not reused. 2: model diagnostics; 3: "cross_size" column.
+CACHE_VERSION = 3
 
 
 def cache_key(cfg: dict, model: str) -> str:
@@ -98,9 +99,25 @@ def run_backtest(panel: Panel, cfg: dict, models: list[str], cache_dir: Path | N
             if path is not None:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 out.to_parquet(path)
+                for table, diag in model.diagnostics.items():       # e.g. feature importance
+                    diag.to_parquet(diagnostics_path(path, table))
             frames.append(out)
             log.info("origin %d  %-16s %.1fs", cutoff, name, secs)
     return pd.concat(frames, ignore_index=True)
+
+
+def diagnostics_path(forecast_path: Path, table: str) -> Path:
+    return forecast_path.with_name(f"{forecast_path.stem}__{table}.parquet")
+
+
+def load_diagnostics(cfg: dict, cache_dir: Path, model: str, table: str) -> pd.DataFrame:
+    """A model's diagnostics table for every origin, read from the cache of the current config."""
+    frames = []
+    for cutoff in forecast_origins(cfg):
+        path = diagnostics_path(cache_dir / f"{model}_{cutoff}_{cache_key(cfg, model)}.parquet", table)
+        if path.exists():
+            frames.append(pd.read_parquet(path).assign(origin=cutoff))
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
 def horizon_bucket(h: pd.Series) -> pd.Categorical:

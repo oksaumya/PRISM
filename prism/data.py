@@ -188,6 +188,58 @@ def prepare_panel(cfg: dict) -> Panel:
                  stockout_params=stock_params)
 
 
+# --------------------------------------------------------------------------- data quality
+
+def data_quality(panel: Panel) -> pd.DataFrame:
+    """Cross-check the launch rule against the price data, and count excluded days.
+
+    In M5 a missing sell price means the item was not listed in that store that
+    week. If "live from the first sale" is a good launch rule, the days before the
+    first sale should be (almost) exactly the days without a price.
+    """
+    D = panel.n_days
+    true_launch = panel.meta["true_launch"].to_numpy() if "true_launch" in panel.meta else panel.launch
+    pre = np.arange(D)[None, :] < true_launch[:, None]          # before the real first sale
+    no_price = np.isnan(panel.price[:, :D])                     # item not listed that week
+    observed = ~np.isnan(panel.y)
+    rows = {
+        "share of series-days before the first sale": pre.mean(),
+        "share of series-days without a price (not listed)": no_price.mean(),
+        "P(no price | before first sale)": no_price[pre].mean() if pre.any() else np.nan,
+        "P(before first sale | no price)": pre[no_price].mean() if no_price.any() else np.nan,
+        "P(no price | after first sale)": no_price[~pre].mean(),
+        "share of observed days flagged as likely stockout": panel.stockout[observed].mean(),
+        "share of series-days not observed (pre-launch or hidden cold-start history)": (~observed).mean(),
+        "share of series-days excluded from training and masked scoring": (~observed | panel.stockout).mean(),
+    }
+    return pd.DataFrame({"metric": list(rows), "value": list(rows.values())})
+
+
+# --------------------------------------------------------------------------- committed sample
+
+SKU_COLUMNS = ["id", "store_id", "cat_id", "dept_id", "demand_class", "adi", "cv2",
+               "sim_cold_start", "true_launch", "launch"]
+
+
+def write_sku_list(panel: Panel, path: Path) -> None:
+    """Save the sampled series (and their class, cold-start role and launch day) as a small CSV."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    panel.meta[SKU_COLUMNS].round({"adi": 4, "cv2": 4}).to_csv(path, index=False)
+
+
+def check_sku_list(panel: Panel, path: Path) -> None:
+    """The panel rebuilt from raw data must contain exactly the committed series, in order,
+    with the same cold-start role and launch day. Raises if anything differs."""
+    ref = pd.read_csv(path)
+    cur = panel.meta[SKU_COLUMNS].reset_index(drop=True)
+    same = len(ref) == len(cur) and all(
+        (ref[c].astype(str).to_numpy() == cur[c].astype(str).to_numpy()).all()
+        for c in ["id", "sim_cold_start", "launch"])
+    if not same:
+        raise ValueError(f"the sampled series differ from the committed list {path}. Did the config or "
+                         "the raw data change? Delete the file to accept the new sample.")
+
+
 # --------------------------------------------------------------------------- caching
 
 ARRAYS = ["y", "y_raw", "stockout", "price", "item_other", "dept_other", "launch"]

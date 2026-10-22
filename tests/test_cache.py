@@ -37,3 +37,18 @@ def test_panel_rebuilt_when_panel_settings_change(panel, tmp_path, monkeypatch):
     assert len(builds) == 2                                               # stale panel is not reused
     assert (tmp_path / "fingerprint.txt").read_text() == panel_fingerprint(cfg)
     np.testing.assert_array_equal(loaded.y, panel.y)
+
+
+def test_sku_list_round_trip_and_mismatch(panel, tmp_path):
+    import pandas as pd
+    import pytest
+    panel.meta["adi"], panel.meta["cv2"] = 1.0, 0.3
+    panel.meta["true_launch"] = panel.meta["launch"] = panel.launch
+    path = tmp_path / "sku_list.csv"
+    data.write_sku_list(panel, path)
+    data.check_sku_list(panel, path)                                      # identical: passes
+    ref = pd.read_csv(path)
+    ref.loc[0, "id"] = "SOMETHING_ELSE"
+    ref.to_csv(path, index=False)
+    with pytest.raises(ValueError, match="differ"):
+        data.check_sku_list(panel, path)

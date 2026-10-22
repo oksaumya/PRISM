@@ -10,12 +10,15 @@ import numpy as np
 import pandas as pd
 
 from . import plots
+from .data import data_quality
+from .decision import cost_ratio_sweep, decision_table
 from .metrics import summarize
 from .stats_tests import panel_dm, series_wilcoxon
 
 LOWER_BETTER = ["MAE", "RMSE", "WAPE", "Pinball", "RMSSE", "SPL"]
 HISTORY_BINS = [7, 14, 28, 56, 90, 180, 10_000]
 HISTORY_LABELS = ["7-13", "14-27", "28-55", "56-89", "90-179", "180+"]
+DM_LAG = 7                     # Newey-West lag of the Diebold-Mariano tests (one week)
 
 
 def _fmt(v: float, col: str) -> str:
@@ -68,8 +71,111 @@ def _order(table: pd.DataFrame) -> pd.DataFrame:
     return table.sort_values("model", key=lambda s: s.map(rank), kind="stable")
 
 
+def decision_assets(masked: pd.DataFrame, levels, dcfg: dict, main_models: list[str],
+                    tab_dir: Path, fig_dir: Path, out_results: Path) -> pd.DataFrame:
+    """Newsvendor cost table and the cost-ratio sweep figure (see prism/decision.py)."""
+    cu, co = dcfg["cost_under"], dcfg["cost_over"]
+    d = masked[masked["model"].isin(main_models)]
+    table = _order(decision_table(d, levels, cu, co))
+    table.to_csv(out_results / "decision_costs.csv", index=False)
+
+    tau = cu / (cu + co)
+    rows = [r"\begin{table}[t]", r"\centering",
+            r"\caption{Newsvendor simulation on stockout-masked days ($c_u=" + f"{cu:g}" + r"$, $c_o=" + f"{co:g}"
+            + r"$, so $\tau^\ast=" + f"{tau:.2f}" + r"$). Each day each series orders the point forecast or the "
+            r"$\tau^\ast$ quantile (rounded up). Cost change is relative to seasonal naive ordering its point forecast.}",
+            r"\label{tab:decision}", r"\scriptsize", r"\setlength{\tabcolsep}{3pt}",
+            r"\resizebox{\columnwidth}{!}{%", r"\begin{tabular}{llrrrrr}", r"\toprule",
+            r"Model & Order & Cost & vs.\ naive & Short & Left over & Fill rate \\", r"\midrule"]
+    best = table.loc[table["policy"] == "quantile", "total_cost"].min()
+    for policy, label in [("point", "point"), ("quantile", r"$q_{\tau^\ast}$")]:
+        for _, r in table[table["policy"] == policy].iterrows():
+            cost = f"{r['total_cost'] / 1e3:,.0f}k"
+            cost = r"\textbf{" + cost + "}" if r["total_cost"] == best else cost
+            rows.append(f"{plots.MODEL_LABELS[r['model']].split(' (')[0]} & {label} & {cost} & "
+                        f"{r['cost_vs_naive_point']:+.0%} & {r['short_units'] / 1e3:,.0f}k & "
+                        f"{r['excess_units'] / 1e3:,.0f}k & {r['fill_rate']:.3f}".replace("%", r"\%") + r" \\")
+        if policy == "point":
+            rows.append(r"\midrule")
+    rows += [r"\bottomrule", r"\end{tabular}", "}", r"\end{table}"]
+    (tab_dir / "decision.tex").write_text("\n".join(rows))
+
+    lo, hi = dcfg["ratio_sweep"]
+    sweep = cost_ratio_sweep(d, levels, range(int(lo), int(hi) + 1), co)
+    sweep.to_csv(out_results / "decision_cost_sweep.csv", index=False)
+    wide = sweep.pivot_table(index=["ratio", "model"], columns="policy", values="total_cost").reset_index()
+    naive_q = wide[wide["model"] == "seasonal_naive"].set_index("ratio")["quantile"]
+    fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.0))
+    for m in [m for m in plots.MODEL_ORDER if m in set(wide["model"])]:
+        w = wide[wide["model"] == m].set_index("ratio")
+        style = dict(color=plots.MODEL_COLORS[m], label=plots.MODEL_LABELS[m])
+        axes[0].plot(w.index, 100 * (1 - w["quantile"] / w["point"]), **style)
+        axes[1].plot(w.index, 100 * (w["quantile"] / naive_q - 1), **style)
+    axes[0].set_title("Saving from ordering the quantile")
+    axes[0].set_ylabel("% cost saved vs. ordering the point")
+    axes[1].set_title("Quantile policy vs. seasonal naive")
+    axes[1].set_ylabel("% cost change")
+    for ax in axes:
+        ax.set_xlabel(r"cost ratio $c_u / c_o$")
+        ax.axhline(0, color=plots.INK_3, lw=0.8)
+    plots.legend_below(fig, axes[0])
+    plots.save(fig, fig_dir / "decision_cost_sweep.pdf"); plt.close(fig)
+    return table
+
+
+def diagnostic_assets(ev: pd.DataFrame, panel, diagnostics: dict, fig_dir: Path, out_results: Path,
+                      min_history: int, cold_start_days: int) -> dict:
+    """Quantile crossing rates, LightGBM feature importance and Kalman fallback counts."""
+    head = {}
+    if "cross_size" in ev:
+        g = ev.groupby("model", sort=False)["cross_size"]
+        crossing = pd.DataFrame({"any_crossing": g.apply(lambda s: (s > 0).mean()),
+                                 "crossing_over_0.1_units": g.apply(lambda s: (s > 0.1).mean()),
+                                 "crossing_over_1_unit": g.apply(lambda s: (s > 1).mean())}).reset_index()
+        crossing = _order(crossing)
+        crossing.to_csv(out_results / "quantile_crossing.csv", index=False)
+        head["crossing"] = crossing.set_index("model").to_dict(orient="index")
+
+    imp = diagnostics.get("feature_importance", pd.DataFrame())
+    if not imp.empty:
+        imp = (imp.groupby(["variant", "feature"])["gain_share"].mean().rename("gain_share").reset_index()
+               .sort_values(["variant", "gain_share"], ascending=[True, False]))
+        imp.to_csv(out_results / "feature_importance.csv", index=False)
+        variants = sorted(imp["variant"].unique(), key=lambda v: -int(v[3:]))      # lag28 first
+        fig, axes = plt.subplots(1, len(variants), figsize=(7.2, 3.6))
+        for ax, v in zip(np.atleast_1d(axes), variants):
+            top = imp[imp["variant"] == v].head(12).iloc[::-1]
+            ax.barh(top["feature"], 100 * top["gain_share"], color=plots.MODEL_COLORS["lightgbm"])
+            ax.set_title(f"LightGBM {v.replace('lag', 'lag-')} model")
+            ax.set_xlabel("% of total gain (mean over origins)")
+            ax.tick_params(axis="y", labelsize=7.5)
+            ax.grid(axis="y", visible=False)
+        plots.save(fig, fig_dir / "feature_importance.pdf"); plt.close(fig)
+        head["top_features"] = {v: imp[imp["variant"] == v].head(5)["feature"].tolist() for v in variants}
+
+    fb = diagnostics.get("fallbacks", pd.DataFrame())
+    if not fb.empty:
+        # only (series, origin) cells that are scored, i.e. with enough history
+        history = fb["origin"].to_numpy() - panel.launch[fb["series"].to_numpy()]
+        fb = fb[history >= min_history].assign(history=history[history >= min_history])
+        fb = fb.join(panel.meta["demand_class"], on="series")
+        flags = ["default_ratios", "raw_history", "sample_variance"]
+        fb["segment"] = np.where(fb["history"] < cold_start_days, f"cold start (<{cold_start_days} days)",
+                                 "established")
+        fb["all"] = "all"
+        parts = []
+        for group, key in [("demand class", "demand_class"), ("history", "segment"), ("all", "all")]:
+            g = fb.groupby(key)
+            parts.append(g[flags].mean().assign(cells=g.size(), group=group))
+        table = pd.concat(parts).rename_axis("segment").reset_index()[["group", "segment", "cells", *flags]]
+        table.to_csv(out_results / "kalman_fallbacks.csv", index=False)
+        head["kalman_fallbacks"] = table.set_index("segment")[["cells", *flags]].to_dict(orient="index")
+    return head
+
+
 def build_assets(ev: pd.DataFrame, panel, levels, out_report: Path, out_results: Path,
-                 main_models: list[str] | None = None) -> dict:
+                 main_models: list[str] | None = None, decision_cfg: dict | None = None,
+                 diagnostics: dict | None = None, min_history: int = 7, cold_start_days: int = 90) -> dict:
     """Write every table and figure of the results section; return headline numbers."""
     plots.apply_style()
     fig_dir, tab_dir = out_report / "figures", out_report / "tables"
@@ -80,6 +186,8 @@ def build_assets(ev: pd.DataFrame, panel, levels, out_report: Path, out_results:
     masked = ev[~ev["stockout"]]
     point_cols = ["MAE", "RMSE", "WAPE", "RMSSE"]
     prob_cols = ["Pinball", "SPL", "Cov80", "Cov90", "Width90"]
+    # backtest size, read from the data so captions stay correct for any config
+    n_series, n_origins, horizon = ev["series"].nunique(), ev["origin"].nunique(), int(ev["h"].max())
 
     # ---- tables
     overall = _order(summarize(ev))
@@ -89,8 +197,8 @@ def build_assets(ev: pd.DataFrame, panel, levels, out_report: Path, out_results:
     both = pd.concat([overall.assign(view="All target days"), overall_m.assign(view="Stockout-masked")])
     (tab_dir / "overall.tex").write_text(latex_table(
         both, point_cols + prob_cols,
-        "Rolling-origin backtest, 5 origins $\\times$ 28 days, 1,500 series. MAE/WAPE use the predictive median, "
-        "RMSE/RMSSE the mean. Best per column in bold (coverage: closest to nominal).",
+        f"Rolling-origin backtest, {n_origins} origins $\\times$ {horizon} days, {n_series:,} series. "
+        "MAE/WAPE use the predictive median, RMSE/RMSSE the mean. Best per column in bold (coverage: closest to nominal).",
         "tab:overall", group_col="view", wide=True))
 
     by_h = _order(summarize(masked, ["horizon_bucket"]))
@@ -114,20 +222,39 @@ def build_assets(ev: pd.DataFrame, panel, levels, out_report: Path, out_results:
         by_cs, ["n", "WAPE", "RMSSE", "SPL", "Cov90"],
         "Cold-start vs established series (stockout-masked).", "tab:coldstart", group_col="segment"))
 
+    # per-origin results: is the ranking stable across the rolling origins, or driven by one period?
+    by_o = _order(summarize(masked[masked["model"].isin(main_models)], ["origin"]))
+    by_o.to_csv(out_results / "metrics_by_origin.csv", index=False)
+    best_spl = by_o.loc[by_o.groupby("origin")["SPL"].idxmin(), "model"].value_counts()
+    rows = [r"\begin{table}[t]", r"\centering",
+            r"\caption{Spread across the " + f"{n_origins}" + r" rolling origins (stockout-masked): mean $\pm$ "
+            r"standard deviation of the per-origin metric, and the number of origins at which each model has the "
+            r"lowest SPL.}",
+            r"\label{tab:origin}", r"\scriptsize", r"\setlength{\tabcolsep}{3pt}",
+            r"\begin{tabular}{lrrrr}", r"\toprule",
+            r"Model & WAPE & SPL & Cov90 & Best SPL \\", r"\midrule"]
+    for m, d in by_o.groupby("model", sort=False):
+        cells = [f"{d[c].mean():.3f} $\\pm$ {d[c].std():.3f}" for c in ["WAPE", "SPL", "Cov90"]]
+        rows.append(f"{plots.MODEL_LABELS[m].split(' (')[0]} & " + " & ".join(cells)
+                    + f" & {int(best_spl.get(m, 0))}/{n_origins}" + r" \\")
+    rows += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
+    (tab_dir / "by_origin.tex").write_text("\n".join(rows))
+
     # ---- significance
     tests = []
     for a, b in [("lightgbm", "kalman"), ("lightgbm", "tsb"), ("kalman", "tsb"), ("kalman", "seasonal_naive"),
                  ("lightgbm", "lightgbm_lag28")]:
         if {a, b} <= set(ev["model"]):
             for loss in ["pinball", "abs_err"]:
-                r = panel_dm(masked, a, b, loss)
+                r = panel_dm(masked, a, b, loss, lag=DM_LAG)
                 w = series_wilcoxon(masked, a, b, loss)
                 tests.append({**r, "share_series_a_better": w["share_a_better"], "wilcoxon_p": w["p_value"]})
     tests = pd.DataFrame(tests)
     tests.to_csv(out_results / "significance_tests.csv", index=False)
     lab = lambda m: plots.MODEL_LABELS[m].split(" (")[0]
     rows = [r"\begin{table}[t]", r"\centering",
-            r"\caption{Diebold--Mariano tests on the daily mean loss (140 target days, HAC lag 7) and the share "
+            r"\caption{Diebold--Mariano tests on the daily mean loss (" + f"{masked['day'].nunique()}"
+            + r" target days, HAC lag " + f"{DM_LAG}" + r") and the share "
             r"of series where model A has lower mean loss (Wilcoxon signed-rank $p$). Negative DM: A is better.}",
             r"\label{tab:dm}", r"\scriptsize", r"\setlength{\tabcolsep}{3pt}",
             r"\resizebox{\columnwidth}{!}{%", r"\begin{tabular}{llrrrr}", r"\toprule",
@@ -203,6 +330,10 @@ def build_assets(ev: pd.DataFrame, panel, levels, out_report: Path, out_results:
         axes[0, c].legend(h, l, loc="upper left", fontsize=6.5, ncols=2)
     plots.save(fig, fig_dir / "fan_charts.pdf"); plt.close(fig)
 
+    decisions = None
+    if decision_cfg:
+        decisions = decision_assets(masked, levels, decision_cfg, main_models, tab_dir, fig_dir, out_results)
+
     timing = ev.groupby(["model", "origin"])["fit_seconds"].first().groupby("model").mean()
     timing.to_csv(out_results / "fit_seconds.csv")
 
@@ -217,5 +348,11 @@ def build_assets(ev: pd.DataFrame, panel, levels, out_report: Path, out_results:
         "spl_gain_lgbm_vs_kalman": 1 - get(overall_m, "lightgbm", "SPL") / get(overall_m, "kalman", "SPL"),
         "fit_seconds": timing.to_dict(),
     }
+    if decisions is not None:
+        head["decision_costs"] = decisions.to_dict(orient="records")
+    head.update(diagnostic_assets(ev, panel, diagnostics or {}, fig_dir, out_results, min_history, cold_start_days))
+    quality = data_quality(panel)
+    quality.to_csv(out_results / "data_quality.csv", index=False)
+    head["data_quality"] = quality.set_index("metric")["value"].to_dict()
     (out_results / "summary.json").write_text(json.dumps(head, indent=2, default=float))
     return head
