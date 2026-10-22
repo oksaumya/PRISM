@@ -64,7 +64,8 @@ def legend_below(fig, ax, ncols: int = 4) -> None:
 def save(fig, path: str | Path) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path)
+    # no creation timestamp, so re-running a script only changes a PDF when the figure changed
+    fig.savefig(path, metadata={"CreationDate": None} if path.suffix == ".pdf" else None)
     if path.suffix == ".pdf":                                  # PNG twin for slides
         fig.savefig(path.with_suffix(".png"))
 

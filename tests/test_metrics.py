@@ -50,3 +50,13 @@ def test_naive_scales_ignore_unlaunched_days():
     sq, ab = naive_scales(y)
     assert sq[0] == pytest.approx((4 + 1) / 2)
     assert ab[0] == pytest.approx((2 + 1) / 2)
+
+
+def test_summarize_can_group_by_origin_and_series():
+    """Scaled metrics need series/origin inside each group, even when grouping by them."""
+    df = pd.concat([_frame(), _frame().assign(origin=200)])
+    by_origin = summarize(df, ["origin"])
+    assert list(by_origin["origin"]) == [100, 200]
+    assert by_origin["RMSSE"].tolist() == pytest.approx([0.75, 0.75])
+    by_series = summarize(df, ["series"])
+    assert by_series["RMSSE"].tolist() == pytest.approx([1.0, 0.5])

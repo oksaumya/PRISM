@@ -7,12 +7,29 @@ plain nested dict so every value is easy to inspect in notebooks.
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 from pathlib import Path
 
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "phase1.yaml"
+
+# config sections that change how the experiment panel is built (sample, flags, cold start;
+# the backtest section matters because the first origin decides the pre-backtest history)
+PANEL_KEYS = ["seed", "data", "demand_class", "stockout", "cold_start", "backtest"]
+
+
+def fingerprint(*parts) -> str:
+    """Short, stable hash of config values. Caches are tagged with it, so a changed
+    setting can never silently reuse results computed under the old one."""
+    blob = json.dumps(parts, sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode()).hexdigest()[:12]
+
+
+def panel_fingerprint(cfg: dict) -> str:
+    return fingerprint({k: cfg.get(k) for k in PANEL_KEYS})
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG, smoke: bool = False) -> dict:

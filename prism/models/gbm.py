@@ -69,7 +69,21 @@ class LightGBMForecaster(Forecaster):
         self.rounds_[min_lag] = rounds
         return point, quantiles
 
+    def check_variants(self, horizon: int) -> None:
+        """Before any training: every variant only serves horizons h <= min_lag (otherwise its
+        features would need data from after the origin), and together they cover 1..horizon once."""
+        served = []
+        for name, var in self.params["variants"].items():
+            lo, hi = var["horizons"]
+            if not 1 <= lo <= hi <= var["min_lag"]:
+                raise ValueError(f"variant {name}: horizons [{lo}, {hi}] must satisfy 1 <= lo <= hi <= "
+                                 f"min_lag={var['min_lag']}, or its lag features would leak")
+            served += range(lo, hi + 1)
+        if sorted(served) != list(range(1, horizon + 1)):
+            raise ValueError(f"LightGBM variants must cover horizons 1..{horizon} exactly once, got {sorted(served)}")
+
     def fit_predict(self, panel: Panel, horizon: int, levels: np.ndarray) -> Forecast:
+        self.check_variants(horizon)
         self.models_, self.rounds_, self.extras = {}, {}, {}
         N = panel.n_series
         point = np.full((N, horizon), np.nan)
@@ -77,7 +91,6 @@ class LightGBMForecaster(Forecaster):
         for name, var in self.params["variants"].items():
             p, q = self.fit_variant(panel, var["min_lag"], horizon, levels)
             lo, hi = var["horizons"]
-            assert hi <= var["min_lag"], "a variant may only serve horizons h <= min_lag"
             cols = slice(lo - 1, hi)
             point[:, cols], quantiles[:, cols] = p[:, cols], q[:, cols]
             if var["min_lag"] >= horizon:          # this variant alone covers every horizon

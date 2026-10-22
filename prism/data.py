@@ -15,15 +15,18 @@ sales after the cutoff are physically removed, so a model cannot peek.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from .config import forecast_origins, resolve
+from .config import forecast_origins, panel_fingerprint, resolve
 from .sampling import demand_class, stratified_sample
 from .stockout import flag_stockouts, flags_at_cutoff
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -199,10 +202,18 @@ def save_panel(panel: Panel, out_dir: Path) -> None:
 
 
 def load_panel(cfg: dict) -> Panel:
-    """Load the cached panel, building it from raw data on first use."""
+    """Load the cached panel, building it from raw data on first use.
+
+    The cache is rebuilt whenever a setting that shapes the panel (sample size,
+    seed, stockout rule, cold start, origins) differs from the one it was built with.
+    """
     out_dir = resolve(cfg["data"]["processed_dir"])
-    if not (out_dir / "panel.npz").exists():
+    stamp = out_dir / "fingerprint.txt"
+    fp = panel_fingerprint(cfg)
+    if not (out_dir / "panel.npz").exists() or not stamp.exists() or stamp.read_text() != fp:
+        log.info("building panel from raw data (config fingerprint %s)", fp)
         save_panel(prepare_panel(cfg), out_dir)
+        stamp.write_text(fp)
     arrays = np.load(out_dir / "panel.npz")
     return Panel(
         **{k: arrays[k] for k in ARRAYS},

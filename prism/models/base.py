@@ -8,6 +8,7 @@ to know what is inside.
 
 from __future__ import annotations
 
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -53,7 +54,9 @@ def empirical_quantiles(resid: np.ndarray, levels: np.ndarray, min_count: int = 
     Series with fewer than ``min_count`` residuals borrow the pooled
     residual distribution of all series.
     """
-    q = np.nanquantile(resid, levels, axis=1).T
+    with warnings.catch_warnings():                      # all-NaN rows (not launched) are replaced below
+        warnings.simplefilter("ignore", RuntimeWarning)
+        q = np.nanquantile(resid, levels, axis=1).T
     pooled = np.nanquantile(resid, levels)
     few = np.sum(~np.isnan(resid), axis=1) < min_count
     q[few] = pooled

@@ -24,9 +24,14 @@ def diebold_mariano(loss_a: np.ndarray, loss_b: np.ndarray, lag: int = 7) -> tup
     has lower loss. HAC variance accounts for autocorrelation in d_t.
     Returns (statistic, two-sided p-value).
     """
-    d = np.asarray(loss_a) - np.asarray(loss_b)
+    d = np.asarray(loss_a, dtype=float) - np.asarray(loss_b, dtype=float)
     T = d.size
-    stat = d.mean() / np.sqrt(newey_west_var(d, lag) / T)
+    if T <= lag + 1:
+        raise ValueError(f"need more than lag + 1 = {lag + 1} loss values, got {T}")
+    var = newey_west_var(d, lag)
+    if var <= 0:                      # identical (or constant-difference) losses: no variance to test
+        return (0.0, 1.0) if d.mean() == 0 else (float(np.sign(d.mean()) * np.inf), 0.0)
+    stat = d.mean() / np.sqrt(var / T)
     return float(stat), float(2 * stats.t.sf(abs(stat), df=T - 1))
 
 
@@ -42,6 +47,10 @@ def series_wilcoxon(df: pd.DataFrame, model_a: str, model_b: str, loss: str = "p
     """Wilcoxon signed-rank test on per-series mean loss differences."""
     per = df.groupby(["model", "series"])[loss].mean().unstack("model")
     diff = (per[model_a] - per[model_b]).dropna()
-    res = stats.wilcoxon(diff)
+    if (diff == 0).all():             # the two models are indistinguishable on every series
+        w, p = 0.0, 1.0
+    else:
+        res = stats.wilcoxon(diff)
+        w, p = float(res.statistic), float(res.pvalue)
     return {"model_a": model_a, "model_b": model_b, "loss": loss, "series": len(diff),
-            "share_a_better": float((diff < 0).mean()), "W": float(res.statistic), "p_value": float(res.pvalue)}
+            "share_a_better": float((diff < 0).mean()), "W": w, "p_value": p}
