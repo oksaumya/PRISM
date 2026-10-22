@@ -4,17 +4,17 @@ The viva is **individual**. Every member should be able to explain the whole pip
 
 ---
 
-## 0. Suggested ownership (5 members)
+## 0. Ownership (5 members)
 
 | Member | Module (primary owner) | Code | Notebook / report section |
 |---|---|---|---|
-| M1 | Data pipeline, sampling and EDA | `prism/data.py`, `prism/sampling.py` | `01_eda.ipynb`; §III Data |
-| M2 | Stockout marking and cold-start design | `prism/stockout.py`, cold-start part of `data.py` | `02_stockouts_coldstart.ipynb`; §III-C/D |
-| M3 | Local model: Kalman filter (+ seasonal naive, TSB baselines) | `prism/models/kalman.py`, `naive.py`, `croston.py` | `03_kalman_walkthrough.ipynb`; §IV-A/B |
-| M4 | Global model: features and LightGBM | `prism/features.py`, `prism/models/gbm.py` | §IV-C; leakage test |
-| M5 | Evaluation: backtest, metrics, significance tests, reporting | `prism/backtest.py`, `metrics.py`, `stats_tests.py`, `report_export.py` | `04_results.ipynb`; §V Results |
+| M1 · Saumya Kumar | Data pipeline, sampling and EDA, data-quality check, committed sample | `prism/data.py`, `prism/sampling.py`, `results/sku_list.csv` | `01_eda.ipynb`; §III Data |
+| M2 · Krishiv | Stockout marking and cold-start design | `prism/stockout.py`, cold-start part of `data.py` | `02_stockouts_coldstart.ipynb`; §III-C/D |
+| M3 · Shivansh Upadhayay | Local model: Kalman filter (+ seasonal naive, TSB baselines), Kalman fallback counts | `prism/models/kalman.py`, `naive.py`, `croston.py` | `03_kalman_walkthrough.ipynb`; §IV-A/B |
+| M4 · Harsha Gonela | Global model: features and LightGBM, feature importance, quantile crossing | `prism/features.py`, `prism/models/gbm.py` | §IV-C; leakage test |
+| M5 · Harshvardhan Gupta | Evaluation: backtest, harness checks, metrics, significance tests, decision layer, reporting | `prism/backtest.py`, `metrics.py`, `stats_tests.py`, `decision.py`, `report_export.py` | `04_results.ipynb`; §V Results |
 
-Everyone: literature review (§II), the local-vs-global story, and the Phase 2 plan.
+Everyone: literature review (§II), the local-vs-global story, the decision layer (§8), and the Phase 2 plan.
 
 ---
 
@@ -121,3 +121,54 @@ a_{t+1} = T a_{t|t}      ;  P_{t+1} = T P_{t|t} Tᵀ + Q             predict
 * **Local vs global, in one sentence:** local models fit each series' own dynamics with few parameters; global models fit one function across series and so can transfer patterns, at the cost of needing careful features.
 * **What would you do with more time?** Hierarchical reconciliation; conformal calibration of the quantiles; a negative-binomial observation model for the filter; the Phase 2 work below.
 * **Phase 2 plan:** a DeepAR-style global RNN (Salinas et al., 2020) with static item embeddings and dynamic calendar/price covariates, trained with a negative-binomial likelihood and scored in the same harness (it only has to implement `Forecaster.fit_predict`). The **hybrid**: feed Kalman-filtered level, season and uncertainty as dynamic covariates to the global network. That gives local adaptivity plus global sharing, and we will run ablations with and without the Kalman features.
+
+---
+
+## 8. Improvements after the first version (what, why, where)
+
+Each item below is one commit in the `improvements/hardening` pull request, so the git history shows exactly what changed. Every one of them is covered by a unit test (36 in total).
+
+### 8.1 Decision layer: from quantiles to orders (`prism/decision.py`)
+**What:** every day, every series "orders" either its point forecast or its quantile at the critical ratio τ\* = c_u / (c_u + c_o), and we add up the cost of units short (c_u = 9 per unit) and units left over (c_o = 1 per unit). τ\* = 0.9 here.
+**Result:** ordering the 0.9 quantile instead of the point forecast cuts cost by 21–49 %. Even seasonal naive ordering its quantile (1,037k) is cheaper than the best model ordering its point forecast (Kalman, 1,275k). LightGBM's quantiles are the cheapest (931k, 7.5 % below Kalman). Above a cost ratio of about 12:1 the Kalman filter's quantile policy costs more than naive, because its upper tail is too wide and it overstocks.
+
+**Q: Why is the τ\* quantile the best order?** Raising the order by one unit saves c_u if demand exceeds the order (probability 1 − F(Q)) and costs c_o otherwise (probability F(Q)). It is worth it while c_u(1 − F(Q)) > c_o F(Q), i.e. until F(Q) = c_u / (c_u + c_o). The test `test_ordering_the_critical_quantile_minimises_cost` checks this numerically.
+**Q: How does this connect to the pinball loss?** The newsvendor cost at τ\* is exactly (c_u + c_o) × the pinball loss at τ\*. Better quantiles mean cheaper inventory, which is the argument for probabilistic forecasting.
+**Q: Limitations?** One period per day, no lead time, no stock carried over, lost sales. It is a clean comparison of forecasts, not a full inventory simulation.
+
+### 8.2 Results per origin (`report/tables/by_origin.tex`)
+**What:** every metric is reported per rolling origin as mean ± standard deviation.
+**Result:** LightGBM has the lowest SPL at 5 of 5 origins; its gap over Kalman (0.016) is about three times the origin-to-origin spread (0.005).
+**Q: Why does this matter?** With only five origins, one unusual month could create a ranking. A consistent winner whose gap exceeds the spread is a much stronger claim. (While adding this we found and fixed a bug: `summarize(df, ["origin"])` used to crash.)
+
+### 8.3 LightGBM feature importance (`report/figures/feature_importance.pdf`)
+**What:** the total gain of each feature in the point model, averaged over origins.
+**Result:** long-run sales levels dominate. In the lag-28 model the 364-day rolling mean alone carries 51 % of the gain, followed by the expanding mean, the 56/112-day means and the item ID; the lag-7 model leans most on the 28-day mean (25 %), because it can use more recent data. Day of week and events add a little. Price and the cross-store features barely appear, which matches the EDA (prices change in only about 1 % of item-weeks). No unexpected feature is on top. (Feature names are relative to the lag: in the lag-28 model `rmean_364` is the 364-day mean ending 28 days before the target day.)
+**Q: Why look at importance?** To explain the model, and as a leakage check: if a feature that should not matter (or that could see the future) were on top, we would investigate before trusting the scores.
+
+### 8.4 Quantile crossing (`results/quantile_crossing.csv`)
+**What:** LightGBM trains one model per quantile level, so nothing forces q_0.90 ≥ q_0.75. We now count how often the raw quantiles were out of order before sorting fixes them.
+**Result:** naive, TSB and Kalman never cross (their quantiles come from one distribution). LightGBM's raw quantiles cross somewhere in 55 % of cells, but the median crossing is 0.0004 units, mostly among the lowest quantiles (0.05, 0.10, 0.25) of slow sellers, where all of them are near zero. Only 1.6 % of cells cross by more than 0.1 units and 0.06 % by more than one unit. So it is numerical noise, not a modelling problem, and sorting removes it.
+**Q: Why does sorting fix it, and can it hurt?** It cannot hurt. Take levels τ₁ < τ₂ with crossed predictions q₁ > q₂. Since ρ_τ(u) = u(τ − 1{u < 0}), the loss of the crossed pair minus the loss of the swapped pair is (τ₂ − τ₁)(q₁ − q₂) > 0 for *every* outcome y. Each swap strictly lowers the pinball loss, so sorting (a sequence of such swaps) does too. This is the rearrangement idea of Chernozhukov et al. (2010).
+
+### 8.5 Kalman fallbacks by demand class (`results/kalman_fallbacks.csv`)
+**What:** the filter has three safety nets: default signal-to-noise ratios (fewer than 56 in-stock days), filtering the raw zeros (almost every recent day flagged) and the sample variance as noise (fewer than 14 usable points). We now count how often each one is used, by demand class.
+**Result:** the safety nets are driven by **history length, not intermittency**. On cold-start cells (< 90 days of history) the filter uses default ratios 50 % of the time and the sample variance 20 % of the time; on established cells both are used for about 0.1 %. Across the four demand classes the rates are flat (2.4–3.4 % default ratios). This is the mechanism behind the cold-start result: with a few weeks of data the filter cannot estimate its own noise, so its intervals are too narrow (90 % interval covers only 71 %).
+**Q: Why report this?** Local models break down exactly where data is scarce. Showing where the safety nets fire is direct evidence for the local-vs-global story.
+
+### 8.6 Committed sample (`results/sku_list.csv`)
+**What:** the 1,500 sampled series (store, category, class, ADI, CV², cold-start role, launch day) are committed to git, and every full run checks that it rebuilds exactly this sample.
+**Q: Why, if the sample comes from a fixed seed?** A seed only guarantees the same sample with the same code, config and library versions. The committed list makes the sample visible and turns any silent change into an error.
+
+### 8.7 EDA: launch rule vs price data (`notebooks/01_eda.ipynb`, section 4b)
+**What:** a missing sell price in M5 means "not listed that week". We compare it with our rule "a series is live from its first sale".
+**Result:** 99.3 % of pre-launch days have no price, and 100 % of unlisted days fall before the first sale, so the rule is confirmed. Prices never disappear after launch, so they cannot reveal stockouts; this is why stockouts are inferred from sales. 36 % of all series-days are excluded from training and masked scoring (before launch, hidden cold-start history or flagged).
+
+### 8.8 Harness checks and the zero model (`prism/backtest.py`)
+**What:** before scoring, every forecast is checked: the model only received data up to the origin; there is a value for every series, horizon and level; and values are finite, non-negative and non-crossing. A "zero" model, whose WAPE must be exactly 1, tests the whole pipeline. LightGBM checks before training that each variant only serves h ≤ min_lag.
+**Q: Why not just trust the models?** A NaN forecast would silently drop out of the metric averages, so two models would be scored on different cells. Failing loudly is safer.
+
+### 8.9 Reproducible caches (`prism/config.py`, `prism/data.py`, `prism/backtest.py`)
+**What:** cached data and forecasts are tagged with a fingerprint (a short SHA-256 hash) of the settings they depend on, plus a cache format version.
+**Bug it fixes:** before, changing `items_per_store`, the seed, the stockout threshold, the number of origins or any model parameter silently reused results computed with the old settings.
+**Q: What is in the fingerprint?** The panel settings (seed, data, demand classes, stockout rule, cold start, origins) plus, for forecasts, the model's parameters, the horizon, the quantile levels and the seed.

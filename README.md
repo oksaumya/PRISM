@@ -18,6 +18,15 @@ Rolling-origin backtest: 1,500 series × 5 origins × 28 days, stockout-masked t
 * The global model wins on every accuracy metric (Diebold–Mariano p < 10⁻²⁰; lower pinball loss on 79 % of series).
 * The gap **grows with sparsity**: SPL is 3 % lower on smooth series, 9 % on intermittent ones and **19 % for new items with 7–13 days of history**, where the local filter's 90 % interval covers only 71 % of outcomes.
 * The Kalman filter is the best local method and the best-calibrated once an item has history. The two are complementary, which motivates the Phase 2 hybrid.
+* The ranking is stable: LightGBM has the lowest SPL at **all 5 origins**.
+* **Quantiles pay off in inventory decisions:** with a lost sale costing 9× an unsold unit, ordering the 0.9 quantile instead of the point forecast cuts simulated cost by 21–49 % (`results/decision_costs.csv`).
+
+| Newsvendor (c_u = 9, c_o = 1) | Order the point forecast | Order the 0.9 quantile | Fill rate (quantile) |
+|---|---|---|---|
+| Seasonal naive | 2,017k | 1,037k | 0.925 |
+| TSB | 1,378k | 964k | 0.939 |
+| Kalman filter | 1,275k | 1,007k | 0.946 |
+| **LightGBM** | 1,344k | **931k** | 0.937 |
 
 ## Why this project
 | Question | How PRISM answers it |
@@ -26,7 +35,8 @@ Rolling-origin backtest: 1,500 series × 5 origins × 28 days, stockout-masked t
 | A zero sale may be a stockout, not zero demand | stockouts are **marked, never imputed**: the filter skips the update, the global model drops the rows, and metrics are reported raw and masked |
 | New items have no history | a simulated cold-start cohort (7–56 days of history) gives a learning curve per model |
 | Point forecasts are not enough for inventory | 7 quantiles per forecast; pinball loss, scaled pinball, 80/90 % coverage and a reliability diagram |
-| Is a difference real? | Diebold–Mariano and Wilcoxon tests |
+| Is a difference real? | Diebold–Mariano and Wilcoxon tests, plus results per origin |
+| What is a better forecast worth? | a newsvendor decision layer orders the critical-ratio quantile and counts the cost |
 
 ## Repository layout
 ```
@@ -45,12 +55,15 @@ prism/                  library code (importable package)
   backtest.py           rolling-origin harness + evaluation frame
   metrics.py            MAE, RMSE, WAPE, RMSSE, pinball, SPL, coverage
   stats_tests.py        Diebold–Mariano (HAC) and Wilcoxon tests
+  decision.py           newsvendor decision layer: quantiles -> order quantities -> cost
   plots.py              one consistent figure style
   report_export.py      LaTeX tables, figures, headline numbers
 configs/phase1.yaml     every experiment setting
 scripts/                download_data.sh · run_backtest.py · make_report_assets.py
 notebooks/              01 EDA · 02 stockouts & cold start · 03 Kalman walkthrough · 04 results
-tests/                  18 unit tests: metrics, Kalman vs statsmodels, leakage, stockouts, backtest
+tests/                  36 unit tests: metrics, Kalman vs statsmodels, leakage, stockouts, backtest,
+                        LightGBM, decision layer, caches, harness checks
+results/                metric tables (CSV), sku_list.csv (the committed sample), data_quality.csv
 report/                 IEEE-format LaTeX report (main.tex, refs.bib, figures/, tables/)
 slides/                 presentation
 docs/viva_notes.md      theory notes, likely viva questions, module ownership
@@ -60,7 +73,7 @@ docs/viva_notes.md      theory notes, likely viva questions, module ownership
 ```bash
 make setup        # uv sync  (Python 3.12, all dependencies pinned in uv.lock)
 make data         # Kaggle download into data/raw (needs a Kaggle API token)
-make test         # unit tests on synthetic data, ~20 s
+make test         # unit tests on synthetic data, ~15 s
 make smoke        # 60 series, 1 origin, ~1 min
 make backtest     # full experiment: 1,500 series x 5 origins, ~20 min on a laptop
 make assets       # report tables + figures from results/evaluation.parquet
