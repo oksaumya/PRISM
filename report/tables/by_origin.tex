@@ -1,0 +1,17 @@
+\begin{table}[t]
+\centering
+\caption{Spread across the 5 rolling origins (stockout-masked): mean $\pm$ standard deviation of the per-origin metric, and the number of origins at which each model has the lowest SPL.}
+\label{tab:origin}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrr}
+\toprule
+Model & WAPE & SPL & Cov90 & Best SPL \\
+\midrule
+Seasonal naive & 0.758 $\pm$ 0.031 & 0.358 $\pm$ 0.008 & 0.924 $\pm$ 0.004 & 0/5 \\
+TSB & 0.600 $\pm$ 0.020 & 0.281 $\pm$ 0.005 & 0.887 $\pm$ 0.002 & 0/5 \\
+Kalman filter & 0.582 $\pm$ 0.019 & 0.280 $\pm$ 0.006 & 0.903 $\pm$ 0.006 & 0/5 \\
+LightGBM & 0.569 $\pm$ 0.011 & 0.264 $\pm$ 0.005 & 0.915 $\pm$ 0.005 & 5/5 \\
+\bottomrule
+\end{tabular}
+\end{table}

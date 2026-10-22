@@ -1,0 +1,9 @@
+metric,value
+share of series-days before the first sale,0.1826350678344496
+share of series-days without a price (not listed),0.1813845097029023
+P(no price | before first sale),0.9931526943517721
+P(before first sale | no price),1.0
+P(no price | after first sale),0.0
+share of observed days flagged as likely stockout,0.13739354619005711
+share of series-days not observed (pre-launch or hidden cold-start history),0.2576795466254508
+share of series-days excluded from training and masked scoring,0.3596695861239911
