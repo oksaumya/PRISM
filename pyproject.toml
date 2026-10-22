@@ -1,0 +1,33 @@
+[project]
+name = "prism"
+version = "0.1.0"
+description = "PRISM: Probabilistic Retail Inventory forecasting with State-space & Machine learning (M5 demand forecasting)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "pyarrow>=15",
+    "scipy>=1.12",
+    "statsmodels>=0.14",
+    "scikit-learn>=1.4",
+    "lightgbm>=4.3",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+    "pyyaml>=6.0",
+    "tqdm>=4.66",
+    "joblib>=1.3",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "jupyter>=1.0", "nbconvert>=7", "ipykernel>=6", "nbformat>=5"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["prism*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

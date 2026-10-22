@@ -1,0 +1,26 @@
+\begin{table*}[t]
+\centering
+\caption{Rolling-origin backtest, 5 origins $\times$ 28 days, 1,500 series. MAE/WAPE use the predictive median, RMSE/RMSSE the mean. Best per column in bold (coverage: closest to nominal).}
+\label{tab:overall}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\resizebox{\ifdim\width>\textwidth \textwidth\else\width\fi}{!}{%
+\begin{tabular}{llrrrrrrrrr}
+\toprule
+Segment & Model & MAE & RMSE & WAPE & RMSSE & Pinball & SPL & Cov80 & Cov90 & Width90 \\
+\midrule
+All target days & Seasonal naive & 2.100 & 4.092 & 0.844 & 0.969 & 0.612 & 0.356 & 0.857 & 0.923 & 7.024 \\
+ & TSB (Croston-type) & 1.668 & 3.275 & 0.670 & 0.742 & 0.498 & 0.275 & 0.778 & 0.878 & 6.495 \\
+ & Kalman filter (local) & 1.620 & 3.683 & 0.651 & 0.736 & 0.489 & 0.272 & \textbf{0.803} & 0.892 & 7.469 \\
+ & LightGBM (global) & \textbf{1.585} & \textbf{3.166} & \textbf{0.637} & \textbf{0.722} & \textbf{0.464} & \textbf{0.253} & 0.777 & 0.903 & 6.467 \\
+ & LightGBM lag-28 only & 1.598 & 3.185 & 0.642 & 0.724 & 0.468 & 0.254 & 0.774 & \textbf{0.902} & 6.482 \\
+\midrule
+Stockout-masked & Seasonal naive & 2.101 & 4.000 & 0.757 & 0.978 & 0.610 & 0.358 & 0.857 & 0.924 & 7.087 \\
+ & TSB (Croston-type) & 1.664 & 3.181 & 0.600 & 0.753 & 0.494 & 0.281 & 0.790 & 0.887 & 6.549 \\
+ & Kalman filter (local) & 1.615 & 3.479 & 0.582 & 0.744 & 0.485 & 0.280 & 0.818 & \textbf{0.903} & 7.563 \\
+ & LightGBM (global) & \textbf{1.579} & \textbf{3.040} & \textbf{0.569} & \textbf{0.732} & \textbf{0.466} & \textbf{0.264} & \textbf{0.798} & 0.915 & 6.523 \\
+ & LightGBM lag-28 only & 1.589 & 3.061 & 0.573 & 0.733 & 0.469 & 0.265 & 0.796 & 0.915 & 6.542 \\
+\bottomrule
+\end{tabular}
+}
+\end{table*}

@@ -5,7 +5,19 @@
 
 PRISM forecasts 28 days of daily unit demand for 1,500 Walmart item-store series, **with predictive quantiles**. It compares a **local** state-space model (a Kalman filter per SKU, written from scratch) with a **global** gradient-boosted model (one LightGBM model across all SKUs) and two classical baselines. Every model is evaluated on an identical rolling-origin backtest that treats **stockouts** and **cold-start items** fairly.
 
-<!-- RESULTS -->
+## Results at a glance
+Rolling-origin backtest: 1,500 series × 5 origins × 28 days, stockout-masked target days (full tables in `results/` and `report/tables/`).
+
+| Model | WAPE ↓ | RMSSE ↓ | SPL ↓ | 80% cov. | 90% cov. |
+|---|---|---|---|---|---|
+| Seasonal naive | 0.757 | 0.978 | 0.358 | 0.857 | 0.924 |
+| TSB | 0.600 | 0.753 | 0.281 | 0.790 | 0.887 |
+| Kalman filter (local) | 0.582 | 0.744 | 0.280 | 0.818 | **0.903** |
+| **LightGBM (global)** | **0.569** | **0.732** | **0.264** | **0.798** | 0.915 |
+
+* The global model wins on every accuracy metric (Diebold–Mariano p < 10⁻²⁰; lower pinball loss on 79 % of series).
+* The gap **grows with sparsity**: SPL is 3 % lower on smooth series, 9 % on intermittent ones and **19 % for new items with 7–13 days of history**, where the local filter's 90 % interval covers only 71 % of outcomes.
+* The Kalman filter is the best local method and the best-calibrated once an item has history. The two are complementary, which motivates the Phase 2 hybrid.
 
 ## Why this project
 | Question | How PRISM answers it |
@@ -38,7 +50,7 @@ prism/                  library code (importable package)
 configs/phase1.yaml     every experiment setting
 scripts/                download_data.sh · run_backtest.py · make_report_assets.py
 notebooks/              01 EDA · 02 stockouts & cold start · 03 Kalman walkthrough · 04 results
-tests/                  20+ unit tests: metrics, Kalman vs statsmodels, leakage, stockouts, backtest
+tests/                  18 unit tests: metrics, Kalman vs statsmodels, leakage, stockouts, backtest
 report/                 IEEE-format LaTeX report (main.tex, refs.bib, figures/, tables/)
 slides/                 presentation
 docs/viva_notes.md      theory notes, likely viva questions, module ownership

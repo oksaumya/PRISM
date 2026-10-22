@@ -1,0 +1,90 @@
+# PRISM Phase 1 experiment configuration.
+# Every number used by the pipeline lives here so experiments are reproducible.
+
+seed: 42
+
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  stores: [CA_1, TX_1, WI_1]      # one store per state
+  items_per_store: 500            # -> 1,500 series in total
+
+# Syntetos-Boylan (2005) demand classification thresholds
+demand_class:
+  adi_cutoff: 1.32
+  cv2_cutoff: 0.49
+
+stockout:
+  # A zero-run of length L is flagged as a likely stockout when
+  # P(L zeros in a row | trailing zero-probability) < p_threshold.
+  p_threshold: 0.001
+  window: 56          # trailing in-stock days used to estimate P(zero)
+  min_obs: 14         # need at least this many trailing days to judge
+
+cold_start:
+  max_history_days: 90            # segment definition at a forecast origin
+  simulate_fraction: 0.10         # share of established series turned into "new" items
+  simulate_history_days: [7, 14, 28, 56]   # history available at the first origin
+  min_history_days: 7             # (series, origin) cells with less history are not scored
+
+backtest:
+  horizon: 28
+  n_origins: 5
+  step: 28
+  last_day: 1941      # last observed day of M5 (d_1941)
+
+quantiles: [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95]
+
+models:
+  seasonal_naive:
+    season: 7
+    residual_window: 364
+
+  tsb:
+    alpha: 0.1        # demand-size smoothing
+    beta: 0.1         # demand-probability smoothing
+    residual_window: 364
+
+  kalman:
+    fit_window: 730               # days of history used for MLE + filtering
+    diffuse_variance: 1.0e+6
+    # profile-likelihood grid (signal-to-noise ratios q = sigma^2_state / sigma^2_eps)
+    q_level_grid: [-6, 0, 13]     # log10 start, stop, num
+    q_season_grid: [-7, -1, 7]
+    refine: true                  # second, finer grid around each series' optimum
+    min_obs_for_mle: 56           # shorter histories use the default ratios below
+    min_obs_in_stock: 14          # fewer in-stock days in the window -> filter the raw history
+    default_q_level: 0.01
+    default_q_season: 0.0001
+
+  lightgbm:
+    train_window: 730             # days of training targets before each origin
+    variants:                     # horizon-safe direct models: valid for h <= min_lag
+      lag28: {min_lag: 28, horizons: [8, 28]}
+      lag7:  {min_lag: 7,  horizons: [1, 7]}
+    point_params:
+      objective: tweedie
+      tweedie_variance_power: 1.1
+      learning_rate: 0.05
+      num_leaves: 127
+      min_data_in_leaf: 100
+      feature_fraction: 0.8
+      bagging_fraction: 0.8
+      bagging_freq: 1
+      lambda_l2: 0.1
+      verbose: -1
+    point_rounds: 800
+    early_stopping_valid_days: 28   # inner validation window (inside training data only)
+    quantile_params:
+      learning_rate: 0.05
+      num_leaves: 63
+      min_data_in_leaf: 200
+      feature_fraction: 0.8
+      bagging_fraction: 0.8
+      bagging_freq: 1
+      verbose: -1
+    quantile_rounds: 300
+
+smoke:                # `--smoke` overrides for a fast end-to-end check
+  items_per_store: 20
+  n_origins: 1

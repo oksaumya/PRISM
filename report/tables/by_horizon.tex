@@ -1,0 +1,32 @@
+\begin{table}[t]
+\centering
+\caption{Accuracy by horizon bucket (stockout-masked).}
+\label{tab:horizon}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\resizebox{\ifdim\width>\columnwidth \columnwidth\else\width\fi}{!}{%
+\begin{tabular}{llrrrrr}
+\toprule
+Segment & Model & WAPE & RMSSE & Pinball & SPL & Cov90 \\
+\midrule
+h1-7 & Seasonal naive & 0.738 & 0.930 & 0.605 & 0.351 & 0.924 \\
+ & TSB (Croston-type) & 0.596 & 0.710 & 0.499 & 0.278 & 0.888 \\
+ & Kalman filter (local) & 0.574 & 0.696 & 0.483 & 0.276 & \textbf{0.903} \\
+ & LightGBM (global) & \textbf{0.561} & \textbf{0.689} & \textbf{0.466} & \textbf{0.260} & 0.920 \\
+ & LightGBM lag-28 only & 0.575 & 0.696 & 0.477 & 0.264 & 0.918 \\
+\midrule
+h8-14 & Seasonal naive & 0.760 & 0.935 & 0.611 & 0.355 & 0.923 \\
+ & TSB (Croston-type) & 0.596 & 0.707 & 0.490 & 0.277 & 0.885 \\
+ & Kalman filter (local) & 0.581 & 0.701 & 0.485 & 0.277 & \textbf{0.902} \\
+ & LightGBM (global) & \textbf{0.574} & \textbf{0.692} & \textbf{0.470} & \textbf{0.263} & 0.915 \\
+ & LightGBM lag-28 only & \textbf{0.574} & \textbf{0.692} & \textbf{0.470} & \textbf{0.263} & 0.915 \\
+\midrule
+h15-28 & Seasonal naive & 0.766 & 0.961 & 0.612 & 0.358 & 0.924 \\
+ & TSB (Croston-type) & 0.603 & 0.733 & 0.493 & 0.280 & 0.887 \\
+ & Kalman filter (local) & 0.586 & 0.727 & 0.487 & 0.279 & \textbf{0.904} \\
+ & LightGBM (global) & \textbf{0.571} & \textbf{0.711} & \textbf{0.464} & \textbf{0.262} & 0.913 \\
+ & LightGBM lag-28 only & \textbf{0.571} & \textbf{0.711} & \textbf{0.464} & \textbf{0.262} & 0.913 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

@@ -1,0 +1,25 @@
+\begin{table}[t]
+\centering
+\caption{Diebold--Mariano tests on the daily mean loss (140 target days, HAC lag 7) and the share of series where model A has lower mean loss (Wilcoxon signed-rank $p$). Negative DM: A is better.}
+\label{tab:dm}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llrrrr}
+\toprule
+A vs B & Loss & DM & $p$ & A better & Wilcoxon $p$ \\
+\midrule
+LightGBM vs Kalman filter & pinball & -11.16 & 4.88e-21 & 79\% & 0 \\
+LightGBM vs Kalman filter & abs. error & -6.33 & 3.11e-09 & 72\% & 0 \\
+LightGBM vs TSB & pinball & -12.13 & 1.5e-23 & 81\% & 0 \\
+LightGBM vs TSB & abs. error & -12.62 & 8.44e-25 & 80\% & 0 \\
+Kalman filter vs TSB & pinball & -5.26 & 5.24e-07 & 55\% & 3.6e-13 \\
+Kalman filter vs TSB & abs. error & -10.13 & 2.14e-18 & 54\% & 7.7e-13 \\
+Kalman filter vs Seasonal naive & pinball & -40.72 & 3.92e-79 & 96\% & 0 \\
+Kalman filter vs Seasonal naive & abs. error & -45.25 & 4.71e-85 & 92\% & 0 \\
+LightGBM vs LightGBM lag-28 only & pinball & -3.00 & 0.00317 & 58\% & 2.2e-16 \\
+LightGBM vs LightGBM lag-28 only & abs. error & -3.06 & 0.00268 & 56\% & 1.9e-12 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
