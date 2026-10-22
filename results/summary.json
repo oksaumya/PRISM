@@ -10,7 +10,7 @@
   ],
   "overall": {
     "seasonal_naive": {
-      "n": 209860.0,
+      "n": 209860,
       "MAE": 2.100438356399536,
       "RMSE": 4.091859340667725,
       "WAPE": 0.8438941836357117,
@@ -23,7 +23,7 @@
       "Width90": 7.023683071136475
     },
     "tsb": {
-      "n": 209860.0,
+      "n": 209860,
       "MAE": 1.6682555675506592,
       "RMSE": 3.274940252304077,
       "WAPE": 0.6702558994293213,
@@ -36,7 +36,7 @@
       "Width90": 6.494535446166992
     },
     "kalman": {
-      "n": 209860.0,
+      "n": 209860,
       "MAE": 1.6200217008590698,
       "RMSE": 3.682535171508789,
       "WAPE": 0.6508769392967224,
@@ -49,7 +49,7 @@
       "Width90": 7.468989849090576
     },
     "lightgbm": {
-      "n": 209860.0,
+      "n": 209860,
       "MAE": 1.5851538181304932,
       "RMSE": 3.1658148765563965,
       "WAPE": 0.6368680596351624,
@@ -62,7 +62,7 @@
       "Width90": 6.466856479644775
     },
     "lightgbm_lag28": {
-      "n": 209860.0,
+      "n": 209860,
       "MAE": 1.5978097915649414,
       "RMSE": 3.185187339782715,
       "WAPE": 0.6419528722763062,
@@ -77,7 +77,7 @@
   },
   "masked": {
     "seasonal_naive": {
-      "n": 188263.0,
+      "n": 188263,
       "MAE": 2.100853681564331,
       "RMSE": 3.999924898147583,
       "WAPE": 0.7571974396705627,
@@ -90,7 +90,7 @@
       "Width90": 7.0867133140563965
     },
     "tsb": {
-      "n": 188263.0,
+      "n": 188263,
       "MAE": 1.6635010242462158,
       "RMSE": 3.1813902854919434,
       "WAPE": 0.5995652079582214,
@@ -103,7 +103,7 @@
       "Width90": 6.548951625823975
     },
     "kalman": {
-      "n": 188263.0,
+      "n": 188263,
       "MAE": 1.6145460605621338,
       "RMSE": 3.4791641235351562,
       "WAPE": 0.5819206833839417,
@@ -116,7 +116,7 @@
       "Width90": 7.563160419464111
     },
     "lightgbm": {
-      "n": 188263.0,
+      "n": 188263,
       "MAE": 1.5788620710372925,
       "RMSE": 3.0400290489196777,
       "WAPE": 0.5690593123435974,
@@ -129,7 +129,7 @@
       "Width90": 6.522825717926025
     },
     "lightgbm_lag28": {
-      "n": 188263.0,
+      "n": 188263,
       "MAE": 1.5885076522827148,
       "RMSE": 3.060560941696167,
       "WAPE": 0.5725358128547668,
@@ -145,10 +145,203 @@
   "wape_gain_lgbm_vs_naive": 0.2484664071352637,
   "spl_gain_lgbm_vs_kalman": 0.05648555060877336,
   "fit_seconds": {
-    "kalman": 51.412647424600436,
-    "lightgbm": 130.27499597500136,
-    "lightgbm_lag28": 130.27499597500136,
-    "seasonal_naive": 0.15916215820034268,
-    "tsb": 0.08455534999957308
+    "kalman": 55.88783285819227,
+    "lightgbm": 145.9993736082106,
+    "lightgbm_lag28": 145.9993736082106,
+    "seasonal_naive": 0.1965435081976466,
+    "tsb": 0.09313024999573827
+  },
+  "decision_costs": [
+    {
+      "model": "seasonal_naive",
+      "policy": "point",
+      "tau": NaN,
+      "total_cost": 2016601.0,
+      "cost_vs_naive_point": 0.0,
+      "short_units": 202822.0,
+      "excess_units": 191203.0,
+      "fill_rate": 0.6117035329614158,
+      "demand": 522338.0
+    },
+    {
+      "model": "seasonal_naive",
+      "policy": "quantile",
+      "tau": 0.9,
+      "total_cost": 1037120.0,
+      "cost_vs_naive_point": -0.48570887349555014,
+      "short_units": 39095.0,
+      "excess_units": 685265.0,
+      "fill_rate": 0.9251538275982218,
+      "demand": 522338.0
+    },
+    {
+      "model": "tsb",
+      "policy": "point",
+      "tau": NaN,
+      "total_cost": 1377543.0,
+      "cost_vs_naive_point": -0.3168985833092416,
+      "short_units": 127012.0,
+      "excess_units": 234435.0,
+      "fill_rate": 0.7568394411281584,
+      "demand": 522338.0
+    },
+    {
+      "model": "tsb",
+      "policy": "quantile",
+      "tau": 0.9,
+      "total_cost": 963557.0,
+      "cost_vs_naive_point": -0.5221875819758097,
+      "short_units": 31888.0,
+      "excess_units": 676565.0,
+      "fill_rate": 0.9389514069433968,
+      "demand": 522338.0
+    },
+    {
+      "model": "kalman",
+      "policy": "point",
+      "tau": NaN,
+      "total_cost": 1274945.0,
+      "cost_vs_naive_point": -0.36777528127775405,
+      "short_units": 113784.0,
+      "excess_units": 250889.0,
+      "fill_rate": 0.782164039376802,
+      "demand": 522338.0
+    },
+    {
+      "model": "kalman",
+      "policy": "quantile",
+      "tau": 0.9,
+      "total_cost": 1007217.0,
+      "cost_vs_naive_point": -0.500537290222508,
+      "short_units": 28153.0,
+      "excess_units": 753840.0,
+      "fill_rate": 0.9461019493125141,
+      "demand": 522338.0
+    },
+    {
+      "model": "lightgbm",
+      "policy": "point",
+      "tau": NaN,
+      "total_cost": 1343679.0,
+      "cost_vs_naive_point": -0.3336911962257283,
+      "short_units": 124514.0,
+      "excess_units": 223053.0,
+      "fill_rate": 0.7616217851276377,
+      "demand": 522338.0
+    },
+    {
+      "model": "lightgbm",
+      "policy": "quantile",
+      "tau": 0.9,
+      "total_cost": 931248.0,
+      "cost_vs_naive_point": -0.5382090954036024,
+      "short_units": 32839.0,
+      "excess_units": 635697.0,
+      "fill_rate": 0.9371307467578465,
+      "demand": 522338.0
+    }
+  ],
+  "crossing": {
+    "seasonal_naive": {
+      "any_crossing": 0.0,
+      "crossing_over_0.1_units": 0.0,
+      "crossing_over_1_unit": 0.0
+    },
+    "tsb": {
+      "any_crossing": 0.0,
+      "crossing_over_0.1_units": 0.0,
+      "crossing_over_1_unit": 0.0
+    },
+    "kalman": {
+      "any_crossing": 0.0,
+      "crossing_over_0.1_units": 0.0,
+      "crossing_over_1_unit": 0.0
+    },
+    "lightgbm": {
+      "any_crossing": 0.5482512150957781,
+      "crossing_over_0.1_units": 0.015538930715715238,
+      "crossing_over_1_unit": 0.0005765748594300963
+    },
+    "lightgbm_lag28": {
+      "any_crossing": 0.5556370913942629,
+      "crossing_over_0.1_units": 0.017192413990279234,
+      "crossing_over_1_unit": 0.0006146955112932432
+    }
+  },
+  "top_features": {
+    "lag28": [
+      "rmean_364",
+      "expanding_mean",
+      "rmean_56",
+      "rmean_112",
+      "item_id"
+    ],
+    "lag7": [
+      "rmean_28",
+      "rmean_364",
+      "rmean_56",
+      "rmean_112",
+      "dow_mean_4"
+    ]
+  },
+  "kalman_fallbacks": {
+    "erratic": {
+      "cells": 1105,
+      "default_ratios": 0.034389140271493215,
+      "raw_history": 0.006334841628959276,
+      "sample_variance": 0.01085972850678733
+    },
+    "intermittent": {
+      "cells": 2410,
+      "default_ratios": 0.026141078838174275,
+      "raw_history": 0.006224066390041493,
+      "sample_variance": 0.008713692946058092
+    },
+    "lumpy": {
+      "cells": 2345,
+      "default_ratios": 0.024307036247334754,
+      "raw_history": 0.008528784648187633,
+      "sample_variance": 0.01023454157782516
+    },
+    "new": {
+      "cells": 10,
+      "default_ratios": 0.6,
+      "raw_history": 0.1,
+      "sample_variance": 0.3
+    },
+    "smooth": {
+      "cells": 1625,
+      "default_ratios": 0.03323076923076923,
+      "raw_history": 0.00676923076923077,
+      "sample_variance": 0.01353846153846154
+    },
+    "cold start (<90 days)": {
+      "cells": 420,
+      "default_ratios": 0.49523809523809526,
+      "raw_history": 0.10714285714285714,
+      "sample_variance": 0.19523809523809524
+    },
+    "established": {
+      "cells": 7075,
+      "default_ratios": 0.0014134275618374558,
+      "raw_history": 0.0012720848056537103,
+      "sample_variance": 0.0
+    },
+    "all": {
+      "cells": 7495,
+      "default_ratios": 0.029086057371581053,
+      "raw_history": 0.007204803202134757,
+      "sample_variance": 0.010940627084723148
+    }
+  },
+  "data_quality": {
+    "share of series-days before the first sale": 0.1826350678344496,
+    "share of series-days without a price (not listed)": 0.1813845097029023,
+    "P(no price | before first sale)": 0.9931526943517721,
+    "P(before first sale | no price)": 1.0,
+    "P(no price | after first sale)": 0.0,
+    "share of observed days flagged as likely stockout": 0.13739354619005711,
+    "share of series-days not observed (pre-launch or hidden cold-start history)": 0.2576795466254508,
+    "share of series-days excluded from training and masked scoring": 0.3596695861239911
   }
 }

@@ -58,7 +58,7 @@ def summarize(df: pd.DataFrame, by: list[str] | None = None) -> pd.DataFrame:
     """Aggregate row-level losses (from :func:`add_losses`) into a metric table."""
     by = by or []
 
-    def agg(g: pd.DataFrame) -> pd.Series:
+    def agg(g: pd.DataFrame) -> dict:
         out = {
             "n": len(g),
             "MAE": g["abs_err"].mean(),
@@ -72,10 +72,13 @@ def summarize(df: pd.DataFrame, by: list[str] | None = None) -> pd.DataFrame:
             if f"cover{tag}" in g:
                 out[f"Cov{tag}"] = g[f"cover{tag}"].mean()
                 out[f"Width{tag}"] = g[f"width{tag}"].mean()
-        return pd.Series(out)
+        return out
 
+    # An explicit loop rather than groupby.apply: apply drops the grouping columns from
+    # each group, and the scaled metrics need "series" and "origin" even when grouping by them.
     keys = ["model", *by]
-    return df.groupby(keys, sort=True, observed=True).apply(agg, include_groups=False).reset_index()
+    rows = [{**dict(zip(keys, key)), **agg(g)} for key, g in df.groupby(keys, sort=True, observed=True)]
+    return pd.DataFrame(rows)
 
 
 def naive_scales(y_hist: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

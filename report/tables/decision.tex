@@ -1,0 +1,24 @@
+\begin{table}[t]
+\centering
+\caption{Newsvendor simulation on stockout-masked days ($c_u=9$, $c_o=1$, so $\tau^\ast=0.90$). Each day each series orders the point forecast or the $\tau^\ast$ quantile (rounded up). Cost change is relative to seasonal naive ordering its point forecast.}
+\label{tab:decision}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llrrrrr}
+\toprule
+Model & Order & Cost & vs.\ naive & Short & Left over & Fill rate \\
+\midrule
+Seasonal naive & point & 2,017k & +0\% & 203k & 191k & 0.612 \\
+TSB & point & 1,378k & -32\% & 127k & 234k & 0.757 \\
+Kalman filter & point & 1,275k & -37\% & 114k & 251k & 0.782 \\
+LightGBM & point & 1,344k & -33\% & 125k & 223k & 0.762 \\
+\midrule
+Seasonal naive & $q_{\tau^\ast}$ & 1,037k & -49\% & 39k & 685k & 0.925 \\
+TSB & $q_{\tau^\ast}$ & 964k & -52\% & 32k & 677k & 0.939 \\
+Kalman filter & $q_{\tau^\ast}$ & 1,007k & -50\% & 28k & 754k & 0.946 \\
+LightGBM & $q_{\tau^\ast}$ & \textbf{931k} & -54\% & 33k & 636k & 0.937 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

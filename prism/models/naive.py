@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 
 from ..data import Panel
@@ -27,6 +29,22 @@ def last_same_weekday(y: np.ndarray, season: int) -> np.ndarray:
     return out
 
 
+class ZeroForecaster(Forecaster):
+    """Always forecasts 0 (every quantile too). Not a real model: a check of the harness.
+
+    Its scores are known in advance (WAPE is exactly 1, since |y - 0| summed over y
+    summed is 1), so it shows that the backtest and metrics run end to end and
+    compute what we think they compute.
+    """
+
+    name = "zero"
+
+    def fit_predict(self, panel: Panel, horizon: int, levels: np.ndarray) -> Forecast:
+        n = panel.n_series
+        return Forecast(point=np.zeros((n, horizon)), quantiles=np.zeros((n, horizon, len(levels))),
+                        levels=levels)
+
+
 class SeasonalNaive(Forecaster):
     """y_hat(T+h) = last in-stock value on the same weekday.
 
@@ -42,7 +60,9 @@ class SeasonalNaive(Forecaster):
         y = observed_history(panel)
         base = last_same_weekday(y, s)
         # series without any valid same-weekday value fall back to their history mean
-        fallback = np.nanmean(y[:, -window:], axis=1, keepdims=True)
+        with warnings.catch_warnings():                     # not-yet-launched series: all NaN, handled below
+            warnings.simplefilter("ignore", RuntimeWarning)
+            fallback = np.nanmean(y[:, -window:], axis=1, keepdims=True)
         fallback = np.where(np.isnan(fallback), 0.0, fallback)
         base = np.where(np.isnan(base), fallback, base)
 

@@ -34,3 +34,11 @@ def test_zero_streak():
     y = np.array([[1.0, 0, 0, 2, 0, np.nan]])
     np.testing.assert_array_equal(zero_streak(y)[0, :5], [0, 1, 2, 0, 1])
     assert np.isnan(zero_streak(y)[0, 5])
+
+
+def test_data_quality_on_synthetic_panel(panel):
+    from prism.data import data_quality
+    dq = data_quality(panel).set_index("metric")["value"]
+    assert 0 < dq["share of observed days flagged as likely stockout"] < 0.5
+    assert dq["share of series-days excluded from training and masked scoring"] >= \
+        dq["share of series-days not observed (pre-launch or hidden cold-start history)"]

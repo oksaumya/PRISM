@@ -19,7 +19,7 @@
 {\large Phase~1 --- Local Kalman Filtering vs.\ Global Gradient Boosting on M5}}
 
 \author{
-\IEEEauthorblockN{Member 1, Member 2, Member 3, Member 4, Member 5}
+\IEEEauthorblockN{Saumya Kumar, Krishiv, Shivansh Upadhayay, Harsha Gonela, Harshvardhan Gupta}
 \IEEEauthorblockA{\textit{Newton School of Technology, Rishihood University}\\
 Course project: Machine Learning (Phase~1)}
 }
@@ -27,7 +27,7 @@ Course project: Machine Learning (Phase~1)}
 \maketitle
 
 \begin{abstract}
-Retail inventory decisions need demand forecasts with calibrated uncertainty for many short, sparse and censored sales series. We compare a \emph{local} model, a structural Kalman filter estimated independently for every stock-keeping unit (SKU), with a \emph{global} gradient-boosted model trained jointly on all SKUs, together with seasonal-naive and TSB baselines. The comparison uses 1{,}500 item-store series from the M5 Forecasting Accuracy data. All models produce seven predictive quantiles and are evaluated on an identical rolling-origin backtest (5 origins $\times$ 28 days). Stockouts are \emph{marked} by a backward-looking zero-run test rather than imputed; the filter treats them as missing observations and the global model drops them from its loss. A simulated cold-start cohort measures how each model behaves with 7--168 days of history. The from-scratch filter matches \texttt{statsmodels} to $10^{-9}$ and fits all SKUs in under a minute through a vectorised profile-likelihood search. Both learned models cut WAPE by about 23--25\% relative to seasonal naive. The global LightGBM model is best on every metric (stockout-masked WAPE 0.569, scaled pinball loss 0.264 vs.\ 0.582 and 0.280 for the filter; Diebold--Mariano $p<10^{-20}$). Its advantage grows from about 3\% on smooth series to 9\% on intermittent series and 19\% for items with under two weeks of history, where the local filter's 90\% intervals cover only 71\% of outcomes. These results locate the gap that motivates Phase~2: a global probabilistic network, and a hybrid that feeds Kalman states into it.
+Retail inventory decisions need demand forecasts with calibrated uncertainty for many short, sparse and censored sales series. We compare a \emph{local} model, a structural Kalman filter estimated independently for every stock-keeping unit (SKU), with a \emph{global} gradient-boosted model trained jointly on all SKUs, together with seasonal-naive and TSB baselines. The comparison uses 1{,}500 item-store series from the M5 Forecasting Accuracy data. All models produce seven predictive quantiles and are evaluated on an identical rolling-origin backtest (5 origins $\times$ 28 days). Stockouts are \emph{marked} by a backward-looking zero-run test rather than imputed; the filter treats them as missing observations and the global model drops them from its loss. A simulated cold-start cohort measures how each model behaves with 7--168 days of history. The from-scratch filter matches \texttt{statsmodels} to $10^{-9}$ and fits all SKUs in under a minute through a vectorised profile-likelihood search. Both learned models cut WAPE by about 23--25\% relative to seasonal naive. The global LightGBM model is best on every metric (stockout-masked WAPE 0.569, scaled pinball loss 0.264 vs.\ 0.582 and 0.280 for the filter; Diebold--Mariano $p<10^{-20}$). Its advantage grows from about 3\% on smooth series to 9\% on intermittent series and 19\% for items with under two weeks of history, where the local filter's 90\% intervals cover only 71\% of outcomes. The ranking holds at every one of the five origins. Turned into newsvendor orders (a lost sale costing nine times an unsold unit), ordering the 0.9 quantile instead of the point forecast cuts simulated inventory cost by 21--49\%, and LightGBM's quantiles give the lowest cost, 7.5\% below the filter's. These results locate the gap that motivates Phase~2: a global probabilistic network, and a hybrid that feeds Kalman states into it.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -45,7 +45,8 @@ This report covers Phase~1 (machine learning) of a two-phase project. We build a
 \item a from-scratch, vectorised Kalman filter for a structural model with profile-likelihood MLE per SKU, exact missing-data handling for stockouts, and exact quantile back-transformation, verified against \texttt{statsmodels};
 \item a horizon-safe \emph{direct} global LightGBM model with Tweedie and quantile losses, whose no-leakage property is unit-tested;
 \item a stockout-marking rule that uses only past data, a simulated cold-start cohort, and an evaluation that reports raw and stockout-masked results by horizon, demand class and history length, with significance tests;
-\item a reproducible pipeline (one configuration file, cached backtests, generated tables and figures) whose model interface Phase~2 models can use unchanged.
+\item a newsvendor decision layer that turns the predictive quantiles into order quantities and measures what better quantiles are worth in inventory cost;
+\item a reproducible pipeline (one configuration file, config-fingerprinted caches, a committed list of the sampled series, generated tables and figures) whose model interface Phase~2 models can use unchanged.
 \end{itemize}
 
 % =====================================================================
@@ -59,6 +60,8 @@ This report covers Phase~1 (machine learning) of a two-phase project. We build a
 
 \textbf{Probabilistic forecasting and evaluation.} Proper scoring rules reward calibration and sharpness together~\cite{gneiting2007}. The pinball loss~\cite{koenker1978} is the consistent scoring function for a quantile, and its average over levels approximates the CRPS. Gneiting~\cite{gneiting2011} shows that a point forecast should be evaluated with a scoring function consistent for the functional it targets: absolute error for the median, squared error for the mean. Hyndman and Koehler~\cite{hyndman2006} introduce scaled errors (MASE), the basis of M5's RMSSE. Rolling-origin evaluation~\cite{tashman2000} and the Diebold--Mariano test~\cite{diebold1995} with HAC variance~\cite{newey1987} are standard for comparing forecasters.
 
+\textbf{From forecasts to inventory decisions.} In the newsvendor model~\cite{arrow1951} a retailer orders before demand is known, pays $c_u$ per unit of unmet demand and $c_o$ per unsold unit, and minimises expected cost by ordering the demand quantile at the critical ratio $\tau^\ast=c_u/(c_u+c_o)$. The expected cost of that order is $(c_u+c_o)$ times the pinball loss at $\tau^\ast$, so quantile accuracy maps directly onto inventory cost, while a point forecast is only optimal when $c_u=c_o$.
+
 \textbf{Deep global models (Phase~2).} DeepAR~\cite{salinas2020} trains one autoregressive recurrent network on all series with a count likelihood and item embeddings, and samples predictive paths. It is the natural deep counterpart of the global model studied here.
 
 % =====================================================================
@@ -67,7 +70,7 @@ This report covers Phase~1 (machine learning) of a two-phase project. We build a
 \subsection{M5 and the experimental sample}
 M5 contains daily unit sales of 3{,}049 products in 10 Walmart stores (CA, TX, WI), 30{,}490 series over 1{,}941 days (2011-01-29 to 2016-05-22). It also includes a calendar with events and state-specific SNAP days, and weekly sell prices. Integrity checks found no missing or negative sales, no duplicate series and a contiguous calendar. The difficulties lie in what the zeros \emph{mean}, not in formatting.
 
-We use one store per state (CA\_1, TX\_1, WI\_1) and 500 series per store. Series are sampled \emph{balanced} over category $\times$ Syntetos--Boylan class~\cite{syntetos2005categorization} (water-filling allocation), with the classes computed only from data before the first forecast origin to avoid selection leakage. The 1{,}500 series comprise 325 smooth, 221 erratic, 482 intermittent and 469 lumpy series (Fig.~\ref{fig:classes}). A series is considered live from its first recorded sale, the convention M5 uses for scaling.
+We use one store per state (CA\_1, TX\_1, WI\_1) and 500 series per store. Series are sampled \emph{balanced} over category $\times$ Syntetos--Boylan class~\cite{syntetos2005categorization} (water-filling allocation), with the classes computed only from data before the first forecast origin to avoid selection leakage. The 1{,}500 series comprise 325 smooth, 221 erratic, 482 intermittent and 469 lumpy series (Fig.~\ref{fig:classes}). A series is considered live from its first recorded sale, the convention M5 uses for scaling. The price file confirms this rule independently: a missing sell price means the item was not listed that week, and 99.3\% of the days before an item's first sale have no price, while every unlisted day falls before the first sale. Once listed, an item's price never disappears, so prices cannot reveal stockouts; these must be inferred from sales. The list of sampled series is committed to the repository (\texttt{results/sku\_list.csv}) and every run checks that it rebuilds the same sample.
 
 \subsection{Exploratory findings}
 The median series has zero sales on 63\% of its active days, and two thirds of all series are zero on more than half of them. Weekly seasonality is strong and stable: Saturdays and Sundays sell about 25\% above the average day (Fig.~\ref{fig:season}). All stores close on Christmas Day. SNAP days lift FOODS sales by 10\% (CA), 16\% (TX) and 6\% (WI). National holidays reduce sales by about 16\%. Prices change in only about 1\% of item-weeks. These findings determine the design: a seasonal state and day-of-week features; a log scale, a Tweedie loss and an intermittent-demand baseline; known-ahead price, event and SNAP features; and explicit handling of non-demand zeros.
@@ -91,7 +94,7 @@ M5 has no inventory data, so stockouts must be inferred. For a zero-run of lengt
 \begin{equation}
 \hat\pi_0^{\,L} < p^\ast = 10^{-3}.
 \end{equation}
-The rule looks only backwards from the start of a run. At a forecast origin, a run still in progress is judged on its truncated length, which a unit test confirms equals recomputation from truncated data. The minimum flagged run adapts to the item: three days for an item that is almost never at zero ($\pi_0=0.05$), 31 days for one at zero 80\% of the time. Overall 13.7\% of observed days are flagged: 4.6\% for smooth and 17\% for intermittent series, and only a quarter to a half of all zeros (Fig.~\ref{fig:stockout}). As $p^\ast$ ranges over $10^{-5}$ to $10^{-2}$, the flagged share ranges from 10\% to 18\%. Flags are never used to invent values. They are \emph{marks}: missing data for the filter, excluded rows for the global model's loss, skipped values for the baselines, and a second evaluation view.
+The rule looks only backwards from the start of a run. At a forecast origin, a run still in progress is judged on its truncated length, which a unit test confirms equals recomputation from truncated data. The minimum flagged run adapts to the item: three days for an item that is almost never at zero ($\pi_0=0.05$), 31 days for one at zero 80\% of the time. Overall 13.7\% of observed days are flagged: 4.6\% for smooth and 17\% for intermittent series, and only a quarter to a half of all zeros (Fig.~\ref{fig:stockout}). As $p^\ast$ ranges over $10^{-5}$ to $10^{-2}$, the flagged share ranges from 10\% to 18\%. Together with days before launch and the hidden history of simulated new items, 36\% of all series-days are excluded from training and from the masked scores. Flags are never used to invent values. They are \emph{marks}: missing data for the filter, excluded rows for the global model's loss, skipped values for the baselines, and a second evaluation view.
 
 \begin{figure}[t]
 \centering
@@ -151,7 +154,11 @@ Prices and the calendar are known ahead, as in M5. The mean model uses a Tweedie
 
 \textbf{Metrics.} Following~\cite{gneiting2011}, MAE and WAPE ($\sum|y-\hat y|/\sum y$) are computed on the predictive \emph{median}, and RMSE and RMSSE~\cite{hyndman2006,makridakis2022accuracy} on the predictive \emph{mean}. Probabilistic accuracy is the pinball loss $\rho_\alpha(u)=\max(\alpha u,(\alpha-1)u)$ averaged over the 7 levels, and its scaled version SPL (divided by the series' in-sample one-step naive MAE, as in M5~\cite{makridakis2022uncertainty}). We also report the empirical coverage and width of the 80\% and 90\% intervals. For count data, quantile $\alpha$ is calibrated when $P(y<q_\alpha)\le\alpha\le P(y\le q_\alpha)$.
 
-\textbf{Views and tests.} Results are reported on all target days and on \emph{stockout-masked} days, by horizon bucket, demand class and history length. Differences are tested with the Diebold--Mariano test~\cite{diebold1995} on the daily cross-sectional mean loss (140 days, Newey--West lag 7~\cite{newey1987}) and with a Wilcoxon signed-rank test across series.
+\textbf{Views and tests.} Results are reported on all target days and on \emph{stockout-masked} days, by horizon bucket, demand class and history length. Differences are tested with the Diebold--Mariano test~\cite{diebold1995} on the daily cross-sectional mean loss (140 days, Newey--West lag 7~\cite{newey1987}) and with a Wilcoxon signed-rank test across series. To check that a ranking is not driven by one period, every metric is also reported per origin.
+
+\textbf{Decision layer.} Each day, each series orders $\lceil\hat q\rceil$ units, where $\hat q$ is either the point forecast or the predictive quantile at $\tau^\ast$ (linearly interpolated between the seven levels). We use $c_u=9$, $c_o=1$ ($\tau^\ast=0.9$, typical of fast-moving retail) on stockout-masked days and sweep $c_u/c_o$ from 1 to 19. The model is deliberately simple: one period per day, no lead time, no stock carried over, and unmet demand is lost.
+
+\textbf{Harness checks.} The backtest verifies every forecast before scoring it: the model received data only up to the origin; there is a forecast for every series, horizon and level; and all values are finite, non-negative and non-crossing. A model that always forecasts zero, with WAPE exactly 1 by construction, checks the pipeline end to end.
 
 % =====================================================================
 \section{Results}
@@ -163,6 +170,10 @@ Prices and the calendar are known ahead, as in M5. The mean model uses a Tweedie
 \textbf{Significance (Table~\ref{tab:dm}).} All headline differences are significant. LightGBM vs.\ Kalman gives DM $=-11.2$ on pinball loss ($p<10^{-20}$), with LightGBM ahead on 79\% of series. The short-lag variant beats the lag-28 ablation by a small but significant margin ($p=0.003$), entirely through $h\le7$ (SPL 0.260 vs.\ 0.264).
 
 \input{tables/dm_tests.tex}
+
+\textbf{Stability across origins (Table~\ref{tab:origin}).} LightGBM has the lowest SPL at all five origins. Its gap to the filter (0.016) is about three times the origin-to-origin standard deviation of either model (0.005--0.006), so the ranking is not the product of one favourable period.
+
+\input{tables/by_origin.tex}
 
 \begin{figure*}[t]
 \centering
@@ -215,11 +226,34 @@ Prices and the calendar are known ahead, as in M5. The mean model uses a Tweedie
 
 \textbf{Cost.} Per origin, the vectorised filter fits 1{,}500 per-SKU MLEs in about 51\,s. LightGBM's 18 boosters (2 horizon variants $\times$ (1 mean + 7 quantile) models, plus 2 early-stopping runs) take about 130\,s on an 8-core laptop.
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{feature_importance.pdf}
+\caption{Gain importance of the LightGBM point models (top 12 features, mean over origins). Feature names are relative to each model's minimum lag.}
+\label{fig:importance}
+\end{figure}
+
+\textbf{Model diagnostics.} \emph{Features (Fig.~\ref{fig:importance}).} Long-run sales levels dominate: the 364-day rolling mean carries 51\% of the lag-28 model's gain, and the lag-7 model relies most on the 28-day mean (25\%), which it is allowed to take from more recent data. Calendar features add a little; price and cross-store features barely register, consistent with prices changing in only 1\% of item-weeks. No implausible feature ranks highly, which supports the leakage test. \emph{Quantile crossing.} LightGBM's seven independently trained quantile models cross somewhere in 55\% of cells, but the median crossing is $4\times10^{-4}$ units, mostly among the lowest quantiles of slow sellers, where all of them are close to zero; only 1.6\% of cells cross by more than 0.1 units and 0.06\% by more than one unit. Sorting removes these crossings and, for any outcome, lowers the pinball loss. \emph{Kalman fallbacks.} The filter's safety nets are driven by history length, not intermittency: on cold-start cells it uses default signal-to-noise ratios 50\% of the time and the sample variance 20\% of the time, against about 0.1\% on established cells and 2.4--3.4\% in each of the four demand classes. This is the mechanism behind its over-confident intervals for new items.
+
+\subsection{Decision analysis}
+\input{tables/decision.tex}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.85\textwidth]{decision_cost_sweep.pdf}
+\caption{Newsvendor cost as the cost ratio $c_u/c_o$ grows. Left: saving from ordering the $\tau^\ast$ quantile instead of the point forecast. Right: cost of each model's quantile policy relative to seasonal naive's.}
+\label{fig:decision}
+\end{figure*}
+
+\textbf{Quantiles beat point forecasts (Table~\ref{tab:decision}).} With a lost sale costing nine times an unsold unit, ordering the point forecast leaves 22--39\% of demand unmet. Ordering the 0.9 quantile raises the fill rate to 0.92--0.95 and cuts total cost by 21\% (Kalman), 30\% (TSB, LightGBM) and 49\% (seasonal naive). Even seasonal naive ordering its quantile (1{,}037k) is cheaper than the best model ordering its point forecast (Kalman, 1{,}275k): with asymmetric costs, \emph{what} is ordered matters more than a better point forecast. Among quantile policies LightGBM is cheapest (931k), 7.5\% below the filter, and it leaves the fewest units unsold.
+
+\textbf{Cost asymmetry (Fig.~\ref{fig:decision}).} The value of ordering the quantile grows steadily with $c_u/c_o$: at $c_u=c_o$ the quantile policy orders the median, which beats the mean under symmetric costs (a 6--10\% saving for the learned models), and at 19:1 the saving reaches 43--67\%. LightGBM's quantile policy stays 9--17\% cheaper than seasonal naive's over the whole range. The filter's advantage over naive shrinks as the ratio rises, and above about 12:1 it costs more: its upper quantiles are too wide (Fig.~\ref{fig:fan}), so it overstocks most when the order sits far in the tail. The decision layer thus exposes a weakness that average calibration hides.
+
 % =====================================================================
 \section{Discussion}
 \textbf{The local--global gap.} The results support the hypothesis behind the project. A local filter adapts quickly and needs no feature engineering. Its intervals are well calibrated once a series has a few months of history, and its treatment of stockouts is exact. But it learns each series in isolation, so it is weakest exactly where inventory risk is highest: sparse and new items. In those cases the global model's ability to transfer patterns gives the largest gains in both accuracy and calibration. The gains are consistent (79\% of series) yet moderate overall (about 6\% SPL), which suggests the two approaches are complementary rather than substitutes.
 
-\textbf{Limitations.} The stockout rule assumes independent zero days and cannot distinguish a stockout from a delisting; we mitigate this with a sensitivity analysis and by always reporting unmasked metrics. The filter's Gaussian log-scale observation model fits intermittent counts poorly. Cold start is simulated, although the hidden history cannot leak. The sample covers three of the ten stores, and hyperparameters were set once rather than tuned per origin.
+\textbf{Limitations.} The stockout rule assumes independent zero days and cannot distinguish a stockout from a delisting; we mitigate this with a sensitivity analysis and by always reporting unmasked metrics. The filter's Gaussian log-scale observation model fits intermittent counts poorly. Cold start is simulated, although the hidden history cannot leak. The sample covers three of the ten stores, and hyperparameters were set once rather than tuned per origin. Five origins are a small sample for estimating variance, so we report the spread across origins rather than only the mean. The newsvendor simulation is single-period: it ignores lead times, order batching and stock carried over between days.
 
 \textbf{Phase~2.} The same harness, metrics and segments will evaluate (i)~a global DeepAR model~\cite{salinas2020} with a negative-binomial likelihood, item embeddings and calendar/price covariates; and (ii)~a \emph{hybrid} that feeds the Kalman filter's filtered level, seasonal effect and state variance to the network as dynamic covariates. The hybrid combines fast local adaptation with global sharing, and ablations with and without the Kalman features will test its value.
 
@@ -228,7 +262,7 @@ Prices and the calendar are known ahead, as in M5. The mean model uses a Tweedie
 PRISM delivers a leakage-free, reproducible comparison of local and global probabilistic demand forecasters on M5. It includes a verified from-scratch Kalman filter, a horizon-safe global LightGBM model, principled stockout marking and an explicit cold-start evaluation. The global model wins consistently and significantly, most of all on intermittent and new items, while the local filter remains the strongest and best-calibrated local method. Measuring that gap is the starting point for Phase~2.
 
 \section*{Reproducibility and Contributions}
-All code, configuration and notebooks are in the project repository. \texttt{make data backtest assets} regenerates every number, table and figure in this report (about 20 minutes on a laptop), and 18 unit tests cover the metrics, the filter (against \texttt{statsmodels}), leakage, stockout flags and backtest alignment. Module ownership: data and EDA (M1), stockouts and cold start (M2), Kalman filter and baselines (M3), features and LightGBM (M4), evaluation and reporting (M5).
+All code, configuration and notebooks are in the project repository. \texttt{make data backtest assets} regenerates every number, table and figure in this report (about 20 minutes on a laptop). Cached data and forecasts are tagged with a fingerprint of the configuration, so a changed setting can never reuse stale results, and the sampled series are committed and checked on every run. 36 unit tests cover the metrics, the filter (against \texttt{statsmodels}), leakage, stockout flags, the LightGBM model, the decision layer, the caches and the harness checks. Module ownership: data and EDA (Saumya Kumar), stockouts and cold start (Krishiv), Kalman filter and baselines (Shivansh Upadhayay), features and LightGBM (Harsha Gonela), evaluation and reporting (Harshvardhan Gupta).
 
 \bibliographystyle{IEEEtran}
 \bibliography{refs}

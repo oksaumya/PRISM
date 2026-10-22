@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import lightgbm as lgb
 import numpy as np
+import pandas as pd
 
 from ..data import Panel
 from ..features import CATEGORICAL, build_features, target_window
@@ -69,7 +70,36 @@ class LightGBMForecaster(Forecaster):
         self.rounds_[min_lag] = rounds
         return point, quantiles
 
+    def feature_importance(self) -> pd.DataFrame:
+        """Total gain of each feature in the point (Tweedie) model of every variant.
+
+        Gain = total reduction of the training loss from splits on that feature. It is a
+        sanity check as much as an explanation: a feature that should not be informative
+        (or that could leak) showing up on top would be a red flag.
+        """
+        frames = []
+        for min_lag, models in self.models_.items():
+            booster = models["point"]
+            gain = booster.feature_importance(importance_type="gain")
+            frames.append(pd.DataFrame({"variant": f"lag{min_lag}", "feature": booster.feature_name(),
+                                        "gain": gain, "gain_share": gain / gain.sum()}))
+        return pd.concat(frames, ignore_index=True)
+
+    def check_variants(self, horizon: int) -> None:
+        """Before any training: every variant only serves horizons h <= min_lag (otherwise its
+        features would need data from after the origin), and together they cover 1..horizon once."""
+        served = []
+        for name, var in self.params["variants"].items():
+            lo, hi = var["horizons"]
+            if not 1 <= lo <= hi <= var["min_lag"]:
+                raise ValueError(f"variant {name}: horizons [{lo}, {hi}] must satisfy 1 <= lo <= hi <= "
+                                 f"min_lag={var['min_lag']}, or its lag features would leak")
+            served += range(lo, hi + 1)
+        if sorted(served) != list(range(1, horizon + 1)):
+            raise ValueError(f"LightGBM variants must cover horizons 1..{horizon} exactly once, got {sorted(served)}")
+
     def fit_predict(self, panel: Panel, horizon: int, levels: np.ndarray) -> Forecast:
+        self.check_variants(horizon)
         self.models_, self.rounds_, self.extras = {}, {}, {}
         N = panel.n_series
         point = np.full((N, horizon), np.nan)
@@ -77,9 +107,9 @@ class LightGBMForecaster(Forecaster):
         for name, var in self.params["variants"].items():
             p, q = self.fit_variant(panel, var["min_lag"], horizon, levels)
             lo, hi = var["horizons"]
-            assert hi <= var["min_lag"], "a variant may only serve horizons h <= min_lag"
             cols = slice(lo - 1, hi)
             point[:, cols], quantiles[:, cols] = p[:, cols], q[:, cols]
             if var["min_lag"] >= horizon:          # this variant alone covers every horizon
                 self.extras[f"lightgbm_{name}"] = Forecast(point=p, quantiles=q, levels=levels)
+        self.diagnostics = {"feature_importance": self.feature_importance()}
         return Forecast(point=point, quantiles=quantiles, levels=levels)

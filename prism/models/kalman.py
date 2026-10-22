@@ -41,6 +41,7 @@ from __future__ import annotations
 import warnings
 
 import numpy as np
+import pandas as pd
 from scipy.stats import norm
 
 from ..data import Panel
@@ -206,8 +207,16 @@ class KalmanForecaster(Forecaster):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             local_var = np.nan_to_num(np.nanvar(z, axis=1), nan=0.25)
-        s2 = np.where(res["n_used"] >= 14, s2, np.maximum(local_var, 0.05))
+        s2_fallback = res["n_used"] < 14
+        s2 = np.where(s2_fallback, np.maximum(local_var, 0.05), s2)
         self.s2_ = s2
+        # how often each safety net was needed, per series (reported by demand class)
+        self.diagnostics = {"fallbacks": pd.DataFrame({
+            "series": np.arange(len(z)),
+            "default_ratios": short,          # < min_obs_for_mle days: no MLE, default signal-to-noise ratios
+            "raw_history": few,               # almost all recent days flagged: filtered the raw zeros instead
+            "sample_variance": s2_fallback,   # < 14 usable points: noise variance from the sample variance
+        })}
 
         m, v = forecast_from_state(res["a"], res["P"], q, s2, horizon)
         # A random-walk level makes the predictive variance grow without bound over long

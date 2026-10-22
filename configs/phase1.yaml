@@ -35,6 +35,13 @@ backtest:
 
 quantiles: [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95]
 
+# Newsvendor decision layer (prism/decision.py): order the demand quantile at
+# tau* = cost_under / (cost_under + cost_over) and count the resulting cost.
+decision:
+  cost_under: 9.0         # cost of one unit of unmet demand (lost sale)
+  cost_over: 1.0          # cost of one unsold unit (holding / waste)
+  ratio_sweep: [1, 19]    # range of cost_under / cost_over for the sweep figure (tau* up to 0.95)
+
 models:
   seasonal_naive:
     season: 7
