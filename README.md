@@ -79,7 +79,7 @@ make backtest     # full experiment: 1,500 series x 5 origins, ~20 min on a lapt
 make assets       # report tables + figures from results/evaluation.parquet
 make notebooks    # execute all notebooks
 ```
-The report compiles on Overleaf: upload the `report/` folder and compile `main.tex` (pdfLaTeX + BibTeX).
+The report compiles on Overleaf: upload the `report/` folder and compile `main.tex` (pdfLaTeX + BibTeX). Locally it also builds with [Tectonic](https://tectonic-typesetting.github.io) (`brew install tectonic`, then `cd report && tectonic main.tex`), which runs BibTeX automatically.
 
 ## Method in brief
 **Data:** M5 Forecasting Accuracy, stores CA_1 / TX_1 / WI_1, 500 series each, sampled *balanced* over category × Syntetos–Boylan class using only pre-backtest history. A series is live from its first sale. 10 % of established series are turned into simulated new items.

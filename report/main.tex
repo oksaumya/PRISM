@@ -1,6 +1,14 @@
 \documentclass[conference]{IEEEtran}
 \IEEEoverridecommandlockouts
-\usepackage[T1]{fontenc}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+\else
+  % XeTeX/LuaTeX (e.g. Tectonic): IEEEtran's Times (ptm) is pdfLaTeX-only, so use a Times clone
+  \usepackage{fontspec}
+  \setmainfont{texgyretermes}[Extension=.otf, UprightFont=*-regular, BoldFont=*-bold,
+                              ItalicFont=*-italic, BoldItalicFont=*-bolditalic]
+\fi
 \usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{graphicx}
@@ -9,6 +17,17 @@
 \usepackage{xcolor}
 \usepackage[hidelinks]{hyperref}
 \graphicspath{{figures/}}
+
+% let LaTeX put more figures/tables on a page, so they stay close to the text that discusses them
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\dbltopfraction}{0.9}
+\renewcommand{\bottomfraction}{0.6}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.8}
+\renewcommand{\dblfloatpagefraction}{0.8}
+\setcounter{topnumber}{3}
+\setcounter{dbltopnumber}{2}
+\setcounter{totalnumber}{4}
 
 \newcommand{\E}{\mathbb{E}}
 \newcommand{\Var}{\mathrm{Var}}
@@ -128,6 +147,15 @@ a_{t+1} &= T(a_t + K_tv_t), \quad P_{t+1} = T(P_t - K_tF_tK_t^\top)T^\top + Q.
 \end{align}
 When $z_t$ is missing (before launch, or a flagged stockout), the update is skipped. This yields the exact conditional distribution, which is why marking rather than imputing fits naturally into the state-space framework.
 
+\input{tables/overall.tex}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.85\textwidth]{metric_by_horizon.pdf}
+\caption{Stockout-masked WAPE and SPL by horizon. The saw-tooth is the weekly cycle (all origins fall on the same weekday, so weekend horizons carry more volume). The model ranking is the same at every horizon.}
+\label{fig:horizon}
+\end{figure*}
+
 \textbf{Estimation.} Writing $Q=\sigma^2_\varepsilon\,\mathrm{diag}(q_\eta,q_\omega,0,\dots)$, we run the filter with unit observation variance. Then $\hat\sigma^2_\varepsilon=n^{-1}\sum_t v_t^2/F^\ast_t$ in closed form, and the profile log-likelihood~\cite{durbin2012}
 \begin{equation}
 \ell_c(q)=-\tfrac n2\big[\log 2\pi+1+\log\hat\sigma^2_\varepsilon\big]-\tfrac12\textstyle\sum_t\log F^\ast_t
@@ -163,28 +191,9 @@ Prices and the calendar are known ahead, as in M5. The mean model uses a Tweedie
 % =====================================================================
 \section{Results}
 \label{sec:results}
-\input{tables/overall.tex}
-
 \textbf{Overall (Table~\ref{tab:overall}).} Both learned models improve on seasonal naive by about a quarter: masked WAPE is 0.757 for naive vs.\ 0.582 for Kalman and 0.569 for LightGBM. The global LightGBM model is best on every accuracy metric, with masked SPL 5.6\% below the filter's (0.264 vs.\ 0.280) and a clearly lower RMSE (3.04 vs.\ 3.48). The Kalman filter is the best local method. It beats TSB on WAPE, RMSSE and pinball loss, and its masked 90\% coverage (0.903) is the closest to nominal. Masking stockout days lowers every model's WAPE by roughly 0.07, which confirms that flagged zeros penalise forecasts of genuine demand.
 
 \textbf{Significance (Table~\ref{tab:dm}).} All headline differences are significant. LightGBM vs.\ Kalman gives DM $=-11.2$ on pinball loss ($p<10^{-20}$), with LightGBM ahead on 79\% of series. The short-lag variant beats the lag-28 ablation by a small but significant margin ($p=0.003$), entirely through $h\le7$ (SPL 0.260 vs.\ 0.264).
-
-\input{tables/dm_tests.tex}
-
-\textbf{Stability across origins (Table~\ref{tab:origin}).} LightGBM has the lowest SPL at all five origins. Its gap to the filter (0.016) is about three times the origin-to-origin standard deviation of either model (0.005--0.006), so the ranking is not the product of one favourable period.
-
-\input{tables/by_origin.tex}
-
-\begin{figure*}[t]
-\centering
-\includegraphics[width=0.85\textwidth]{metric_by_horizon.pdf}
-\caption{Stockout-masked WAPE and SPL by horizon. The saw-tooth is the weekly cycle (all origins fall on the same weekday, so weekend horizons carry more volume). The model ranking is the same at every horizon.}
-\label{fig:horizon}
-\end{figure*}
-
-\textbf{Horizon (Fig.~\ref{fig:horizon}).} Accuracy varies far more with the day of week than with the horizon, and the ranking never changes. Neither local model degrades much over 28 days, because their forecasts are dominated by a stable level and weekly pattern.
-
-\input{tables/by_class.tex}
 
 \begin{figure}[t]
 \centering
@@ -193,10 +202,6 @@ Prices and the calendar are known ahead, as in M5. The mean model uses a Tweedie
 \label{fig:class}
 \end{figure}
 
-\textbf{Demand class (Table~\ref{tab:class}, Fig.~\ref{fig:class}).} The global model's advantage over the filter grows with sparsity: SPL is 3\% lower on smooth and erratic series, 4\% on lumpy series and 9\% on intermittent series. On intermittent series even TSB beats the filter on WAPE (0.813 vs.\ 0.836). A Gaussian filter on $\log(1+y)$ is a poor description of mostly-zero counts, while the global model pools the zero-inflation structure across hundreds of similar items.
-
-\input{tables/cold_start.tex}
-
 \begin{figure*}[t]
 \centering
 \includegraphics[width=0.85\textwidth]{cold_start_curve.pdf}
@@ -204,7 +209,17 @@ Prices and the calendar are known ahead, as in M5. The mean model uses a Tweedie
 \label{fig:cold}
 \end{figure*}
 
-\textbf{Cold start (Table~\ref{tab:coldstart}, Fig.~\ref{fig:cold}).} Here the gap is largest. On cold-start cells LightGBM's SPL is 13\% below the filter's (0.286 vs.\ 0.328), compared with 5\% on established cells. With 7--13 days of history the filter's SPL is 0.374 vs.\ 0.302 (19\%), and its 90\% interval covers only 71\% of outcomes, while LightGBM's covers 90\%. With so little data the local MLE cannot estimate its own noise, so it is over-confident. The global model draws on the same item in other stores, the department and the learned price and calendar effects. As history accumulates the filter recovers quickly, and its gap closes to about 10\% by 56--89 days.
+\input{tables/dm_tests.tex}
+
+\textbf{Stability across origins (Table~\ref{tab:origin}).} LightGBM has the lowest SPL at all five origins. Its gap to the filter (0.016) is about three times the origin-to-origin standard deviation of either model (0.005--0.006), so the ranking is not the product of one favourable period.
+
+\input{tables/by_origin.tex}
+
+\input{tables/by_class.tex}
+
+\input{tables/cold_start.tex}
+
+\textbf{Horizon (Fig.~\ref{fig:horizon}).} Accuracy varies far more with the day of week than with the horizon, and the ranking never changes. Neither local model degrades much over 28 days, because their forecasts are dominated by a stable level and weekly pattern.
 
 \begin{figure}[t]
 \centering
@@ -213,8 +228,6 @@ Prices and the calendar are known ahead, as in M5. The mean model uses a Tweedie
 \label{fig:calib}
 \end{figure}
 
-\textbf{Calibration (Fig.~\ref{fig:calib}).} Lower quantiles are calibrated for all models; their intervals are long because of the point mass at zero. Upper quantiles of the filter and LightGBM fall slightly short (0.889 and 0.895 of outcomes below the 0.9 quantile). Seasonal naive reaches nominal coverage only through wide intervals, at a 30\% higher pinball loss, which illustrates why coverage alone is not a sufficient criterion~\cite{gneiting2007}.
-
 \begin{figure*}[t]
 \centering
 \includegraphics[width=0.85\textwidth]{fan_charts.pdf}
@@ -222,9 +235,7 @@ Prices and the calendar are known ahead, as in M5. The mean model uses a Tweedie
 \label{fig:fan}
 \end{figure*}
 
-\textbf{Examples (Fig.~\ref{fig:fan}).} On the smooth series both models track the weekly pattern. LightGBM's median is closer to the realised level (11.1 vs.\ 9.5 units against an average of 12), and its upper tail is tighter (95\% quantile 21.9 vs.\ 27.8). On the intermittent series LightGBM's lower quartile is exactly zero, a point mass learned from many similar items, while the filter's continuous log-normal band stays above zero (0.2).
-
-\textbf{Cost.} Per origin, the vectorised filter fits 1{,}500 per-SKU MLEs in about 51\,s. LightGBM's 18 boosters (2 horizon variants $\times$ (1 mean + 7 quantile) models, plus 2 early-stopping runs) take about 130\,s on an 8-core laptop.
+\textbf{Demand class (Table~\ref{tab:class}, Fig.~\ref{fig:class}).} The global model's advantage over the filter grows with sparsity: SPL is 3\% lower on smooth and erratic series, 4\% on lumpy series and 9\% on intermittent series. On intermittent series even TSB beats the filter on WAPE (0.813 vs.\ 0.836). A Gaussian filter on $\log(1+y)$ is a poor description of mostly-zero counts, while the global model pools the zero-inflation structure across hundreds of similar items.
 
 \begin{figure}[t]
 \centering
@@ -233,17 +244,25 @@ Prices and the calendar are known ahead, as in M5. The mean model uses a Tweedie
 \label{fig:importance}
 \end{figure}
 
-\textbf{Model diagnostics.} \emph{Features (Fig.~\ref{fig:importance}).} Long-run sales levels dominate: the 364-day rolling mean carries 51\% of the lag-28 model's gain, and the lag-7 model relies most on the 28-day mean (25\%), which it is allowed to take from more recent data. Calendar features add a little; price and cross-store features barely register, consistent with prices changing in only 1\% of item-weeks. No implausible feature ranks highly, which supports the leakage test. \emph{Quantile crossing.} LightGBM's seven independently trained quantile models cross somewhere in 55\% of cells, but the median crossing is $4\times10^{-4}$ units, mostly among the lowest quantiles of slow sellers, where all of them are close to zero; only 1.6\% of cells cross by more than 0.1 units and 0.06\% by more than one unit. Sorting removes these crossings and, for any outcome, lowers the pinball loss. \emph{Kalman fallbacks.} The filter's safety nets are driven by history length, not intermittency: on cold-start cells it uses default signal-to-noise ratios 50\% of the time and the sample variance 20\% of the time, against about 0.1\% on established cells and 2.4--3.4\% in each of the four demand classes. This is the mechanism behind its over-confident intervals for new items.
-
-\subsection{Decision analysis}
-\input{tables/decision.tex}
-
 \begin{figure*}[t]
 \centering
 \includegraphics[width=0.85\textwidth]{decision_cost_sweep.pdf}
 \caption{Newsvendor cost as the cost ratio $c_u/c_o$ grows. Left: saving from ordering the $\tau^\ast$ quantile instead of the point forecast. Right: cost of each model's quantile policy relative to seasonal naive's.}
 \label{fig:decision}
 \end{figure*}
+
+\textbf{Cold start (Table~\ref{tab:coldstart}, Fig.~\ref{fig:cold}).} Here the gap is largest. On cold-start cells LightGBM's SPL is 13\% below the filter's (0.286 vs.\ 0.328), compared with 5\% on established cells. With 7--13 days of history the filter's SPL is 0.374 vs.\ 0.302 (19\%), and its 90\% interval covers only 71\% of outcomes, while LightGBM's covers 90\%. With so little data the local MLE cannot estimate its own noise, so it is over-confident. The global model draws on the same item in other stores, the department and the learned price and calendar effects. As history accumulates the filter recovers quickly, and its gap closes to about 10\% by 56--89 days.
+
+\textbf{Calibration (Fig.~\ref{fig:calib}).} Lower quantiles are calibrated for all models; their intervals are long because of the point mass at zero. Upper quantiles of the filter and LightGBM fall slightly short (0.889 and 0.895 of outcomes below the 0.9 quantile). Seasonal naive reaches nominal coverage only through wide intervals, at a 30\% higher pinball loss, which illustrates why coverage alone is not a sufficient criterion~\cite{gneiting2007}.
+
+\textbf{Examples (Fig.~\ref{fig:fan}).} On the smooth series both models track the weekly pattern. LightGBM's median is closer to the realised level (11.1 vs.\ 9.5 units against an average of 12), and its upper tail is tighter (95\% quantile 21.9 vs.\ 27.8). On the intermittent series LightGBM's lower quartile is exactly zero, a point mass learned from many similar items, while the filter's continuous log-normal band stays above zero (0.2).
+
+\textbf{Cost.} Per origin, the vectorised filter fits 1{,}500 per-SKU MLEs in about 51\,s. LightGBM's 18 boosters (2 horizon variants $\times$ (1 mean + 7 quantile) models, plus 2 early-stopping runs) take about 130\,s on an 8-core laptop.
+
+\textbf{Model diagnostics.} \emph{Features (Fig.~\ref{fig:importance}).} Long-run sales levels dominate: the 364-day rolling mean carries 51\% of the lag-28 model's gain, and the lag-7 model relies most on the 28-day mean (25\%), which it is allowed to take from more recent data. Calendar features add a little; price and cross-store features barely register, consistent with prices changing in only 1\% of item-weeks. No implausible feature ranks highly, which supports the leakage test. \emph{Quantile crossing.} LightGBM's seven independently trained quantile models cross somewhere in 55\% of cells, but the median crossing is $4\times10^{-4}$ units, mostly among the lowest quantiles of slow sellers, where all of them are close to zero; only 1.6\% of cells cross by more than 0.1 units and 0.06\% by more than one unit. Sorting removes these crossings and, for any outcome, lowers the pinball loss. \emph{Kalman fallbacks.} The filter's safety nets are driven by history length, not intermittency: on cold-start cells it uses default signal-to-noise ratios 50\% of the time and the sample variance 20\% of the time, against about 0.1\% on established cells and 2.4--3.4\% in each of the four demand classes. This is the mechanism behind its over-confident intervals for new items.
+
+\subsection{Decision analysis}
+\input{tables/decision.tex}
 
 \textbf{Quantiles beat point forecasts (Table~\ref{tab:decision}).} With a lost sale costing nine times an unsold unit, ordering the point forecast leaves 22--39\% of demand unmet. Ordering the 0.9 quantile raises the fill rate to 0.92--0.95 and cuts total cost by 21\% (Kalman), 30\% (TSB, LightGBM) and 49\% (seasonal naive). Even seasonal naive ordering its quantile (1{,}037k) is cheaper than the best model ordering its point forecast (Kalman, 1{,}275k): with asymmetric costs, \emph{what} is ordered matters more than a better point forecast. Among quantile policies LightGBM is cheapest (931k), 7.5\% below the filter, and it leaves the fewest units unsold.
 
