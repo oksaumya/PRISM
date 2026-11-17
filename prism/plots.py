@@ -26,6 +26,8 @@ MODEL_COLORS = {
     "lightgbm": "#eb6834",
     "tsb": "#1baf7a",
     "lightgbm_lag28": "#6250d6",
+    "deepar": "#c2387e",                      # Phase 2: global deep model
+    "deepar_noid": "#e597bf",                 # its ablation: a lighter tint of the same hue
     "seasonal_naive": BASELINE_GRAY,          # the reference baseline recedes
 }
 MODEL_LABELS = {
@@ -34,8 +36,10 @@ MODEL_LABELS = {
     "kalman": "Kalman filter (local)",
     "lightgbm": "LightGBM (global)",
     "lightgbm_lag28": "LightGBM lag-28 only",
+    "deepar": "DeepAR (global DL)",
+    "deepar_noid": "DeepAR without IDs",
 }
-MODEL_ORDER = ["seasonal_naive", "tsb", "kalman", "lightgbm", "lightgbm_lag28"]
+MODEL_ORDER = ["seasonal_naive", "tsb", "kalman", "lightgbm", "lightgbm_lag28", "deepar", "deepar_noid"]
 SEQ_BLUE = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95"]
 
 

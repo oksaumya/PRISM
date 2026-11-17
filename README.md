@@ -1,7 +1,7 @@
 # PRISM
 **P**robabilistic **R**etail **I**nventory forecasting with **S**tate-space & **M**achine learning
 
-*Inventory demand forecasting with Kalman filtering and global models on M5 · Phase 1 (Machine Learning course project)*
+*Inventory demand forecasting with Kalman filtering and global models on M5 · Phase 1 (Machine Learning) and Phase 2 (Deep Learning) course project*
 
 PRISM forecasts the next **28 days of daily unit demand** for **1,500 Walmart item-store series** from the [M5 Forecasting – Accuracy](https://www.kaggle.com/competitions/m5-forecasting-accuracy) data. Every forecast comes with **7 predictive quantiles**, not just a point estimate.
 
@@ -9,6 +9,7 @@ It compares:
 
 * a **local** model: a structural Kalman filter fitted separately to every SKU, written from scratch and checked against `statsmodels`;
 * a **global** model: one LightGBM model trained on all SKUs at once;
+* a **global deep model (Phase 2)**: DeepAR, an autoregressive LSTM with a negative-binomial likelihood trained on all SKUs, written from scratch in PyTorch, plus an ablation without item/store embeddings;
 * two classical baselines: **seasonal naive** and **TSB** (Croston-type, for intermittent demand).
 
 All models run through the same **rolling-origin backtest** and are scored on identical cells. The backtest treats **stockouts** (zero sales caused by an empty shelf) and **cold-start items** (little history) explicitly. A **newsvendor decision layer** turns the quantiles into order quantities, which shows what better uncertainty is worth in inventory cost.
@@ -25,11 +26,21 @@ All models run through the same **rolling-origin backtest** and are scored on id
 | Seasonal naive | 0.757 | 0.978 | 0.358 | 0.857 | 0.924 |
 | TSB | 0.600 | 0.753 | 0.281 | 0.790 | 0.887 |
 | Kalman filter (local) | 0.582 | 0.744 | 0.280 | 0.818 | **0.903** |
-| **LightGBM (global)** | **0.569** | **0.732** | **0.264** | **0.798** | 0.915 |
+| LightGBM (global) | 0.569 | **0.732** | 0.264 | **0.798** | 0.915 |
+| **DeepAR (global DL)** | **0.565** | 0.736 | **0.2635** | 0.900 | 0.948 |
+| DeepAR without IDs (ablation) | 0.564 | 0.734 | 0.2635 | 0.901 | 0.949 |
 
-<sub>Bold = best; for coverage, closest to the nominal 80 % / 90 %. SPL = scaled pinball loss. Source: `results/metrics_masked.csv`.</sub>
+<sub>Bold = best among the main models (the ablation is not bolded); for coverage, closest to the nominal 80 % / 90 %. SPL = scaled pinball loss. DeepAR's quantiles are integers, so outcomes often land exactly on an interval bound; its coverage is above nominal although its 90 % intervals are the narrowest (6.27 vs 6.52 units for LightGBM), and every quantile is calibrated under the count-data criterion. Source: `results/metrics_masked.csv`.</sub>
 
-**Key findings**
+**Key findings (Phase 2: DeepAR)**
+
+* **DeepAR closes the same local–global gap as LightGBM.** Its SPL is 6.0 % below the Kalman filter's (Diebold–Mariano p ≈ 4 × 10⁻¹², better on 79 % of series).
+* **DeepAR and LightGBM are statistically tied** on pinball loss (SPL 0.2635 vs 0.2643, p = 0.28). DeepAR is slightly better on absolute error (p = 0.025), LightGBM on RMSE (3.04 vs 3.07). Each has the lowest SPL at some origins (DeepAR 3 of 5).
+* **DeepAR is the best model for new items:** SPL 0.276 vs 0.302 (LightGBM) and 0.374 (Kalman) with 7–13 days of history, with a 90 % interval covering 92 % of outcomes.
+* **Item identity is not what is shared.** Removing every ID embedding changes nothing (SPL 0.2635 for both, p = 0.30), and the learned item embeddings barely separate categories. The gain comes from dynamics learned across series.
+* **Coherent quantiles, lowest inventory cost.** Sample-path quantiles never cross (LightGBM's cross in 55 % of cells), and ordering DeepAR's 0.9 quantile gives the lowest newsvendor cost (926k vs 931k for LightGBM) with the fewest unsold units.
+
+**Key findings (Phase 1)**
 
 * **The global model wins on every accuracy metric** (MAE, RMSE, WAPE, RMSSE, pinball, SPL), both masked and unmasked. Against the Kalman filter the Diebold–Mariano p-value on daily pinball loss is about 5 × 10⁻²¹, and LightGBM has the lower pinball loss on **79 % of series**.
 * **The gap grows as the data gets sparser.** LightGBM's SPL is 3 % lower than the filter's on smooth series, 9 % lower on intermittent series and **19 % lower on new items with 7–13 days of history**. On those new items the filter's 90 % interval covers only **71 %** of outcomes.
@@ -42,7 +53,8 @@ All models run through the same **rolling-origin backtest** and are scored on id
 | Seasonal naive | 2,017k | 1,037k | 0.925 |
 | TSB | 1,378k | 964k | 0.939 |
 | Kalman filter | 1,275k | 1,007k | 0.946 |
-| **LightGBM** | 1,344k | **931k** | 0.937 |
+| LightGBM | 1,344k | 931k | 0.937 |
+| **DeepAR** | 1,345k | **926k** | 0.923 |
 
 <sub>Source: `results/decision_costs.csv`; cost-ratio sweep in `results/decision_cost_sweep.csv`.</sub>
 
@@ -88,9 +100,12 @@ M5 has no inventory data, so stockouts must be inferred from the sales signal. A
 | TSB (Teunter, Syntetos & Babai, 2011) | local, intermittent demand | smoothed demand probability × smoothed size | empirical one-step errors |
 | Kalman filter | local structural model: random-walk level + 7-day seasonal on log1p(y) | log-normal mean | Gaussian on the log scale, exact quantile back-transform |
 | LightGBM | global; Tweedie mean model + one quantile model per level | direct, horizon-safe: a lag-7 model serves h = 1–7, a lag-28 model serves h = 8–28 | direct quantile regression |
+| DeepAR (Phase 2) | global; 2-layer LSTM, negative-binomial likelihood, item/dept/category/store embeddings | mean of 200 ancestral sample paths | empirical quantiles of the sample paths |
 
 * **Kalman filter** (`prism/models/kalman.py`): the noise variance is concentrated out of the likelihood. The two signal-to-noise ratios are then found by a profile-likelihood grid search with local refinement, separately for every SKU. The filter is vectorised across SKUs, so one grid point costs one pass over all series. Stockout and pre-launch days are treated as missing observations, which is the exact treatment in a linear Gaussian model. The unit tests check it against `statsmodels.UnobservedComponents` to within 10⁻⁶.
 * **LightGBM** (`prism/models/gbm.py`, `prism/features.py`): features are lags, rolling statistics, same-weekday means, zero streaks, cross-store sales of the same item, department sales, prices, calendar events, SNAP days, item age and categorical IDs. Every sales-derived feature for day *t* uses only days ≤ *t* − min_lag, so no recursion is needed and nothing leaks. Early stopping uses the last 28 days *inside* the training window. A lag-28-only model is kept as an ablation: the two-model setup is slightly but significantly better (SPL 0.264 vs 0.265, DM p = 0.003).
+
+* **DeepAR** (`prism/models/deepar.py`): each training window (112 context + 28 target days) is scaled by 1 + its context mean. Inputs are sales 1, 7, 14 and 28 days back with "observed" flags, calendar, SNAP, relative price, item age and the ID embeddings. Stockout and pre-launch days get zero weight in the likelihood, as in the filter. Epochs are chosen by early stopping on the last 28 days before the origin, then the network is retrained on the whole window. It trains on the Apple GPU (MPS) when available, about 2.5 minutes per origin. PyTorch and LightGBM ship conflicting OpenMP runtimes on macOS, so the backtest fits DeepAR in a separate process (`prism/backtest.py`, `TORCH_MODELS`).
 
 ### Evaluation
 * **Rolling origin:** 5 origins, 28 days apart. The last one forecasts the official M5 test window (d_1914–d_1941). At each origin every model is refit from scratch on a panel that physically contains no later data.
@@ -109,10 +124,10 @@ M5 has no inventory data, so stockouts must be inferred from the sales signal. A
 ```bash
 git clone https://github.com/oksaumya/PRISM.git && cd PRISM
 make setup        # uv sync: create .venv with pinned dependencies
-make test         # 36 unit tests on synthetic data, no download needed (under a minute)
+make test         # 45 unit tests on synthetic data, no download needed (under a minute)
 make data         # download M5 into data/raw and check its shape (30,490 series × 1,941 days)
 make smoke        # 60 series, 1 origin: fast end-to-end check, writes to results/smoke/
-make backtest     # full experiment: 1,500 series × 5 origins, about 20 min on a laptop
+make backtest     # full experiment: 1,500 series × 5 origins, 6 models, about 45 min on a laptop
 make assets       # report tables, figures and results/*.csv from results/evaluation.parquet
 make notebooks    # execute all four notebooks in place
 ```
@@ -132,7 +147,7 @@ uv run python scripts/run_backtest.py --no-cache                 # refit, ignori
 uv run python scripts/run_backtest.py --config my_config.yaml    # another experiment config
 ```
 
-On the full run, one origin takes on average about 1 minute for the Kalman filter (grid search over all 1,500 SKUs) and about 2.5 minutes for LightGBM (2 variants × 8 boosters). The baselines take under a second (`results/fit_seconds.csv`).
+On the full run, one origin takes on average about 1 minute for the Kalman filter (grid search over all 1,500 SKUs), about 2 minutes for LightGBM (2 variants × 8 boosters) and about 2.5 minutes for DeepAR on an Apple M3 GPU (4 minutes for the ablation, which trains longer before early stopping). The baselines take under a second (`results/fit_seconds.csv`).
 
 ### Build the report
 `report/main.pdf` is committed. To rebuild it, upload `report/` to Overleaf and compile `main.tex` with pdfLaTeX + BibTeX. Locally, [Tectonic](https://tectonic-typesetting.github.io) works too: `brew install tectonic`, then `cd report && tectonic main.tex`.
@@ -147,7 +162,7 @@ Every experiment setting lives in [`configs/phase1.yaml`](configs/phase1.yaml): 
 * **Quantile crossing is measured, then fixed.** LightGBM's separate quantile models can cross. The raw crossings are logged (`results/quantile_crossing.csv`; only 0.06 % of cells cross by more than one unit) and then removed by sorting, which can only lower the pinball loss.
 
 ## Tests
-`make test` runs 36 tests on synthetic data in a few dozen seconds:
+`make test` runs 45 tests on synthetic data in a few dozen seconds:
 
 * **Kalman filter:** matches `statsmodels` (likelihood, predictions and variances, including with missing data); the grid MLE recovers known parameters.
 * **No leakage:** feature rows for a day are identical whether the panel is cut just after the latest day the features may use, or at that day itself.
@@ -156,6 +171,7 @@ Every experiment setting lives in [`configs/phase1.yaml`](configs/phase1.yaml): 
 * **Decision layer:** ordering the critical quantile minimises the newsvendor cost.
 * **Backtest and harness:** all models are scored on identical cells; a zero forecaster gives WAPE = 1 exactly; broken or leaky forecasts are rejected.
 * **Caches:** a changed setting invalidates cached panels and forecasts.
+* **DeepAR:** the negative-binomial likelihood matches `scipy`; samples have the analytic mean, variance and quantiles; sales on stockout or pre-launch days do not change the loss; window inputs ignore data after the origin; same seed gives identical forecasts; the loss decreases; the no-ID ablation has no embeddings; DeepAR and LightGBM run in one backtest. Tests that import PyTorch run in a child pytest process (see `tests/conftest.py`).
 
 ## Repository layout
 ```
@@ -171,6 +187,7 @@ prism/                    library code (importable package)
     croston.py            TSB intermittent-demand method
     kalman.py             structural Kalman filter, profile-likelihood MLE, vectorised over SKUs
     gbm.py                global LightGBM: Tweedie mean + quantile models, horizon-safe direct
+    deepar.py             global DeepAR (PyTorch): NB likelihood, embeddings, ancestral sampling
   backtest.py             rolling-origin harness, forecast checks, evaluation frame
   metrics.py              MAE, RMSE, WAPE, RMSSE, pinball, SPL, coverage
   stats_tests.py          Diebold–Mariano (HAC) and Wilcoxon tests
@@ -179,8 +196,8 @@ prism/                    library code (importable package)
   report_export.py        LaTeX tables, figures, results CSVs and summary.json
 configs/phase1.yaml       every experiment setting
 scripts/                  download_data.sh · run_backtest.py · make_report_assets.py
-notebooks/                01 EDA · 02 stockouts & cold start · 03 Kalman walkthrough · 04 results
-tests/                    36 unit tests (synthetic data)
+notebooks/                01 EDA · 02 stockouts & cold start · 03 Kalman walkthrough · 04 results · 05 DeepAR
+tests/                    45 unit tests (synthetic data)
 results/                  metric tables (CSV), summary.json, sku_list.csv (the committed sample)
 report/                   IEEE-format LaTeX report: main.tex, main.pdf, refs.bib, figures/, tables/
 presentation/             presentation as PDF

@@ -13,7 +13,7 @@ test:           ## unit tests (synthetic data, no download needed)
 smoke:          ## 60 series, 1 origin, about 1 minute
 	uv run python scripts/run_backtest.py --smoke
 
-backtest:       ## full rolling-origin backtest (1,500 series x 5 origins, about 20 min)
+backtest:       ## full rolling-origin backtest (1,500 series x 5 origins, 6 models, about 45 min)
 	uv run python scripts/run_backtest.py
 
 assets:         ## report tables, figures and headline numbers

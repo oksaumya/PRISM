@@ -1,5 +1,7 @@
 """Synthetic panel so tests run in seconds and need no Kaggle download."""
 
+import os
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -74,3 +76,21 @@ def cfg() -> dict:
                        "default_q_level": 0.01, "default_q_season": 1e-4},
         },
     }
+
+
+
+# PyTorch and LightGBM bundle different OpenMP runtimes, which cannot share a process on macOS
+# (see prism.backtest.TORCH_MODELS): whichever is loaded second crashes or deadlocks. Tests
+# marked "torch" import PyTorch, so a normal run deselects them and test_deepar.py runs them in
+# a child pytest process instead (PRISM_TORCH_CHILD=1). Nothing may import torch at module level.
+def pytest_configure(config):
+    config.addinivalue_line("markers", "torch: imports PyTorch in the test process (runs in a child pytest)")
+
+
+def pytest_collection_modifyitems(config, items):
+    if os.environ.get("PRISM_TORCH_CHILD"):
+        return
+    keep = [i for i in items if not i.get_closest_marker("torch")]
+    if len(keep) < len(items):
+        config.hook.pytest_deselected(items=[i for i in items if i.get_closest_marker("torch")])
+        items[:] = keep

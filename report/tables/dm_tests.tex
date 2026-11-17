@@ -19,6 +19,12 @@ Kalman filter vs Seasonal naive & pinball & -40.72 & 3.92e-79 & 96\% & 0 \\
 Kalman filter vs Seasonal naive & abs. error & -45.25 & 4.71e-85 & 92\% & 0 \\
 LightGBM vs LightGBM lag-28 only & pinball & -3.00 & 0.00317 & 58\% & 2.2e-16 \\
 LightGBM vs LightGBM lag-28 only & abs. error & -3.06 & 0.00268 & 56\% & 1.9e-12 \\
+DeepAR vs Kalman filter & pinball & -7.62 & 3.54e-12 & 79\% & 0 \\
+DeepAR vs Kalman filter & abs. error & -5.24 & 5.92e-07 & 74\% & 0 \\
+DeepAR vs LightGBM & pinball & -1.09 & 0.277 & 58\% & 9.2e-08 \\
+DeepAR vs LightGBM & abs. error & -2.27 & 0.025 & 66\% & 1.4e-15 \\
+DeepAR vs DeepAR without IDs & pinball & 1.05 & 0.297 & 52\% & 0.62 \\
+DeepAR vs DeepAR without IDs & abs. error & 0.99 & 0.323 & 39\% & 0.64 \\
 \bottomrule
 \end{tabular}
 }

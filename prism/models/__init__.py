@@ -11,6 +11,8 @@ REGISTRY = {
     "tsb": "croston:TSB",
     "kalman": "kalman:KalmanForecaster",
     "lightgbm": "gbm:LightGBMForecaster",
+    "deepar": "deepar:DeepARForecaster",
+    "deepar_noid": "deepar:DeepARForecaster",   # ablation: same network, no static ID embeddings
 }
 
 

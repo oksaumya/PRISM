@@ -12,22 +12,30 @@ Segment & Model & WAPE & RMSSE & SPL & Cov90 \\
 erratic & Seasonal naive & 0.762 & 0.907 & 0.299 & 0.911 \\
  & TSB (Croston-type) & 0.600 & 0.715 & 0.246 & 0.892 \\
  & Kalman filter (local) & 0.576 & 0.716 & 0.239 & \textbf{0.896} \\
- & LightGBM (global) & \textbf{0.572} & \textbf{0.693} & \textbf{0.232} & 0.895 \\
+ & LightGBM (global) & 0.572 & 0.693 & 0.232 & 0.895 \\
+ & DeepAR (global DL) & 0.565 & 0.689 & 0.230 & 0.928 \\
+ & DeepAR without IDs & \textbf{0.564} & \textbf{0.684} & \textbf{0.229} & 0.924 \\
 \midrule
 intermittent & Seasonal naive & 1.038 & 1.053 & 0.416 & 0.940 \\
  & TSB (Croston-type) & 0.813 & 0.797 & 0.322 & 0.879 \\
  & Kalman filter (local) & 0.836 & 0.786 & 0.329 & \textbf{0.902} \\
- & LightGBM (global) & \textbf{0.770} & \textbf{0.784} & \textbf{0.299} & 0.929 \\
+ & LightGBM (global) & 0.770 & \textbf{0.784} & 0.299 & 0.929 \\
+ & DeepAR (global DL) & 0.764 & 0.790 & \textbf{0.298} & 0.966 \\
+ & DeepAR without IDs & \textbf{0.760} & 0.792 & 0.299 & 0.969 \\
 \midrule
 lumpy & Seasonal naive & 1.046 & 0.947 & 0.379 & 0.919 \\
  & TSB (Croston-type) & 0.798 & 0.715 & 0.286 & \textbf{0.893} \\
  & Kalman filter (local) & 0.787 & 0.710 & 0.285 & 0.913 \\
- & LightGBM (global) & \textbf{0.769} & \textbf{0.703} & \textbf{0.274} & 0.922 \\
+ & LightGBM (global) & 0.769 & \textbf{0.703} & 0.274 & 0.922 \\
+ & DeepAR (global DL) & \textbf{0.763} & 0.709 & \textbf{0.273} & 0.953 \\
+ & DeepAR without IDs & 0.764 & 0.705 & 0.274 & 0.949 \\
 \midrule
 smooth & Seasonal naive & 0.571 & 0.961 & 0.287 & 0.916 \\
  & TSB (Croston-type) & 0.469 & 0.765 & 0.239 & 0.885 \\
  & Kalman filter (local) & 0.444 & 0.749 & 0.232 & 0.898 \\
- & LightGBM (global) & \textbf{0.439} & \textbf{0.723} & \textbf{0.225} & \textbf{0.900} \\
+ & LightGBM (global) & 0.439 & \textbf{0.723} & 0.225 & \textbf{0.900} \\
+ & DeepAR (global DL) & 0.438 & 0.728 & 0.223 & 0.929 \\
+ & DeepAR without IDs & \textbf{0.437} & 0.725 & \textbf{0.223} & 0.936 \\
 \bottomrule
 \end{tabular}
 }

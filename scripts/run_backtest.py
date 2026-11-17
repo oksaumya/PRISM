@@ -1,4 +1,4 @@
-"""Run the Phase 1 rolling-origin backtest and write forecasts + metrics.
+"""Run the rolling-origin backtest (Phase 1 models + Phase 2 DeepAR) and write forecasts + metrics.
 
     uv run python scripts/run_backtest.py            # full experiment (1,500 series, 5 origins)
     uv run python scripts/run_backtest.py --smoke    # 60 series, 1 origin: fast end-to-end check
@@ -15,7 +15,7 @@ from prism.config import load_config, resolve
 from prism.data import check_sku_list, load_panel, write_sku_list
 from prism.metrics import summarize
 
-MODELS = ["seasonal_naive", "tsb", "kalman", "lightgbm"]
+MODELS = ["seasonal_naive", "tsb", "kalman", "lightgbm", "deepar", "deepar_noid"]
 
 
 def main() -> None:

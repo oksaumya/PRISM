@@ -92,6 +92,33 @@ models:
       verbose: -1
     quantile_rounds: 300
 
+  # Phase 2: global DeepAR (prism/models/deepar.py), negative binomial likelihood
+  deepar: &deepar
+    context_length: 112           # days the LSTM is unrolled over before forecasting
+    prediction_length: 28         # days of each training window after the context
+    train_window: 730             # training windows end within the last 730 days before the origin
+    hidden_size: 64
+    num_layers: 2
+    dropout: 0.1
+    use_static_ids: true
+    embedding_dims: {item_id: 16, dept_id: 4, cat_id: 2, store_id: 2}
+    batch_size: 256
+    batches_per_epoch: 100
+    max_epochs: 40
+    patience: 5                   # epochs without validation improvement before stopping
+    learning_rate: 1.0e-3
+    weight_decay: 0.0
+    grad_clip: 10.0
+    valid_days: 28                # early-stopping window (inside the training data only)
+    refit_full: true              # retrain on the whole window for the selected number of epochs
+    num_samples: 200              # sample paths per series
+    predict_chunk: 64             # series per sampling batch
+    device: auto                  # mps (Apple GPU) / cuda when available, else cpu
+
+  deepar_noid:                    # ablation: no item / dept / category / store embeddings
+    <<: *deepar
+    use_static_ids: false
+
 smoke:                # `--smoke` overrides for a fast end-to-end check
   items_per_store: 20
   n_origins: 1

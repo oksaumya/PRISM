@@ -71,15 +71,48 @@ def cache_key(cfg: dict, model: str) -> str:
                        cfg["backtest"]["horizon"], cfg["quantiles"], cfg["seed"])
 
 
-def run_backtest(panel: Panel, cfg: dict, models: list[str], cache_dir: Path | None = None) -> pd.DataFrame:
+# Models built on PyTorch. PyTorch and LightGBM each ship their own OpenMP runtime, and on macOS
+# two runtimes in one process crash or deadlock LightGBM, so these models are fitted in a fresh
+# child process ("spawn") that never imports LightGBM. Results and caches are identical.
+TORCH_MODELS = {"deepar", "deepar_noid"}
+
+
+def _cache_path(cfg: dict, cache_dir: Path | None, name: str, cutoff: int) -> Path | None:
+    return cache_dir / f"{name}_{cutoff}_{cache_key(cfg, name)}.parquet" if cache_dir else None
+
+
+def _child_init(level: int) -> None:
+    logging.basicConfig(level=level, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
+
+
+def run_backtest(panel: Panel, cfg: dict, models: list[str], cache_dir: Path | None = None,
+                 isolate: bool = True) -> pd.DataFrame:
     """Forecasts of every model at every origin as one long frame (cached per model/origin)."""
+    isolated = [m for m in models if isolate and m in TORCH_MODELS]
+    frames = []
+    if rest := [m for m in models if m not in isolated]:
+        frames.append(_run_in_process(panel, cfg, rest, cache_dir))
+    for name in isolated:
+        paths = [_cache_path(cfg, cache_dir, name, c) for c in forecast_origins(cfg)]
+        if all(p is not None and p.exists() for p in paths):
+            frames.append(_run_in_process(panel, cfg, [name], cache_dir))      # cache only: no torch
+            continue
+        import multiprocessing as mp
+        from concurrent.futures import ProcessPoolExecutor
+        with ProcessPoolExecutor(1, mp_context=mp.get_context("spawn"), initializer=_child_init,
+                                 initargs=(logging.getLogger().getEffectiveLevel(),)) as pool:
+            frames.append(pool.submit(_run_in_process, panel, cfg, [name], cache_dir).result())
+    return pd.concat(frames, ignore_index=True)
+
+
+def _run_in_process(panel: Panel, cfg: dict, models: list[str], cache_dir: Path | None) -> pd.DataFrame:
     H = cfg["backtest"]["horizon"]
     levels = np.asarray(cfg["quantiles"], dtype=float)
     frames = []
     for cutoff in forecast_origins(cfg):
         info = panel.truncate(cutoff)
         for name in models:
-            path = cache_dir / f"{name}_{cutoff}_{cache_key(cfg, name)}.parquet" if cache_dir else None
+            path = _cache_path(cfg, cache_dir, name, cutoff)
             if path is not None and path.exists():
                 cached = pd.read_parquet(path)
                 frames.append(cached)
